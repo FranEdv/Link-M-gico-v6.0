@@ -1,4 +1,4 @@
-// index.js - LinkMágico v6.0 Server com Compliance LGPD Integrado
+// server.js - LinkMágico v6.0 Server Corrigido
 require('dotenv').config();
 
 const express = require('express');
@@ -11,7 +11,6 @@ const path = require('path');
 const fs = require('fs');
 const bodyParser = require('body-parser');
 const morgan = require('morgan');
-const { ComplianceManager, setupComplianceRoutes } = require('./compliance-middleware');
 
 // Optional dependencies with graceful fallback
 let puppeteer = null;
@@ -42,9 +41,6 @@ const logger = winston.createLogger({
     ]
 });
 
-// ===== Setup Compliance LGPD =====
-const complianceManager = setupComplianceRoutes(app);
-
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', true);
 
@@ -55,29 +51,24 @@ app.use(helmet({
 }));
 
 app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+    origin: ['https://link-m-gico-v6-0-hmpl.onrender.com', 'http://localhost:3000', 'http://localhost:8080'],
     credentials: true,
-    maxAge: 86400
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ extended: true, limit: '5mb' }));
-app.use(bodyParser.json({ limit: '5mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '10mb' }));
 
 app.use(morgan('combined'));
 
-// Serve static assets
-const publicDir = path.join(__dirname, 'public');
-if (fs.existsSync(publicDir)) {
-    app.use(express.static(publicDir, {
-        maxAge: '1d',
-        etag: true,
-        lastModified: true
-    }));
-}
-
-// Serve compliance pages from memory if files don't exist
-const pagesDir = path.join(__dirname, 'pages');
+// Serve static files from public directory
+app.use(express.static('public', {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true
+}));
 
 // ===== Analytics & Cache =====
 const analytics = {
@@ -162,23 +153,6 @@ function extractBonuses(text) {
     return Array.from(new Set(bonuses));
 }
 
-// Hide price helper (LGPD compliance - não exibir preços diretamente)
-function hidePriceFields(data) {
-    try {
-        if (!data || typeof data !== 'object') return;
-        if (data.price) {
-            data._hidden_price = data.price;
-            delete data.price;
-        }
-        if (data.price_detected && Array.isArray(data.price_detected) && data.price_detected.length) {
-            data._hidden_price_detected = data.price_detected;
-            data.price_detected = [];
-        }
-    } catch (e) {
-        // silent
-    }
-}
-
 // ===== Content extraction =====
 function extractCleanTextFromHTML(html) {
     try {
@@ -211,8 +185,8 @@ function extractCleanTextFromHTML(html) {
     }
 }
 
-// ===== Page extraction with LGPD compliance =====
-async function extractPageData(url, req = null) {
+// ===== Page extraction =====
+async function extractPageData(url) {
     const startTime = Date.now();
     try {
         if (!url) throw new Error('URL is required');
@@ -224,18 +198,7 @@ async function extractPageData(url, req = null) {
             return cached;
         }
         
-        logger.info(`Starting LGPD compliant extraction for: ${url}`);
-
-        // Log do processamento para compliance
-        if (req && complianceManager) {
-            await complianceManager.logDataProcessing({
-                url,
-                purpose: 'chatbot_creation',
-                legalBasis: 'consent',
-                dataTypes: ['web_content', 'extracted_text'],
-                retentionPeriod: 'temporary'
-            }, req);
-        }
+        logger.info(`Starting extraction for: ${url}`);
 
         const extractedData = {
             title: '',
@@ -250,9 +213,7 @@ async function extractPageData(url, req = null) {
             extractionTime: 0,
             method: 'unknown',
             bonuses_detected: [],
-            price_detected: [],
-            lgpdCompliant: true,
-            robotsAllowed: false
+            price_detected: []
         };
 
         let html = '';
@@ -260,19 +221,18 @@ async function extractPageData(url, req = null) {
             logger.info('Attempting Axios + Cheerio extraction...');
             const response = await axios.get(url, {
                 headers: {
-                    'User-Agent': 'LinkMagico-Bot/6.0 (+https://link-m-gico-v6-0-hmpl.onrender.com/robot-info)',
+                    'User-Agent': 'Mozilla/5.0 (compatible; LinkMagico-Bot/6.0; +https://link-m-gico-v6-0-hmpl.onrender.com)',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
                 },
-                timeout: 10000,
-                maxRedirects: 3,
+                timeout: 15000,
+                maxRedirects: 5,
                 validateStatus: status => status >= 200 && status < 400
             });
             html = response.data || '';
             const finalUrl = response.request?.res?.responseUrl || url;
             if (finalUrl && finalUrl !== url) extractedData.url = finalUrl;
             extractedData.method = 'axios-cheerio';
-            extractedData.robotsAllowed = true; // Será verificado pelo middleware
             logger.info(`Axios extraction successful, HTML length: ${String(html).length}`);
         } catch (axiosError) {
             logger.warn(`Axios extraction failed for ${url}: ${axiosError.message || axiosError}`);
@@ -314,9 +274,6 @@ async function extractPageData(url, req = null) {
 
                 extractedData.bonuses_detected = extractBonuses(bodyText);
 
-                // Não extrair preços diretamente (compliance)
-                extractedData.price_detected = [];
-
                 logger.info(`Cheerio extraction completed for ${url}`);
                 analytics.successfulExtractions++;
             } catch (cheerioError) {
@@ -338,7 +295,7 @@ async function extractPageData(url, req = null) {
                     timeout: 20000
                 });
                 const page = await browser.newPage();
-                await page.setUserAgent('LinkMagico-Bot/6.0 (+https://link-m-gico-v6-0-hmpl.onrender.com/robot-info)');
+                await page.setUserAgent('Mozilla/5.0 (compatible; LinkMagico-Bot/6.0)');
                 await page.setRequestInterception(true);
                 page.on('request', (req) => {
                     const rt = req.resourceType();
@@ -425,11 +382,8 @@ async function extractPageData(url, req = null) {
 
         extractedData.extractionTime = Date.now() - startTime;
         
-        // Remove dados sensíveis antes de cachear
-        hidePriceFields(extractedData);
-        
         setCacheData(cacheKey, extractedData);
-        logger.info(`LGPD compliant extraction completed for ${url} in ${extractedData.extractionTime}ms using ${extractedData.method}`);
+        logger.info(`Extraction completed for ${url} in ${extractedData.extractionTime}ms using ${extractedData.method}`);
         return extractedData;
 
     } catch (error) {
@@ -441,7 +395,7 @@ async function extractPageData(url, req = null) {
             benefits: [],
             testimonials: [],
             cta: '',
-            summary: '',
+            summary: 'Erro ao extrair dados da página. Verifique se a URL está acessível.',
             cleanText: '',
             imagesText: [],
             url: url || '',
@@ -449,8 +403,7 @@ async function extractPageData(url, req = null) {
             method: 'failed',
             error: error.message || String(error),
             bonuses_detected: [],
-            price_detected: [],
-            lgpdCompliant: true
+            price_detected: []
         };
     }
 }
@@ -488,7 +441,7 @@ async function callOpenAI(messages, temperature = 0.2, maxTokens = 300) {
 }
 
 // ===== Answer generation =====
-const NOT_FOUND_MSG = "Não encontrei essa informação específica na página. Posso te ajudar com outras dúvidas ou enviar o link direto?";
+const NOT_FOUND_MSG = "Não encontrei essa informação específica na página. Posso te ajudar com outras dúvidas?";
 
 function shouldActivateSalesMode(instructions = '') {
     if (!instructions) return false;
@@ -499,12 +452,6 @@ function shouldActivateSalesMode(instructions = '') {
 async function generateAIResponse(userMessage, pageData = {}, conversation = [], instructions = '') {
     const startTime = Date.now();
     try {
-        // Make a shallow copy and remove price fields to ensure price never appears in the prompt/context
-        if (pageData && typeof pageData === 'object') {
-            pageData = Object.assign({}, pageData);
-            hidePriceFields(pageData);
-        }
-
         const salesMode = shouldActivateSalesMode(instructions);
 
         // Direct link handling
@@ -519,8 +466,7 @@ async function generateAIResponse(userMessage, pageData = {}, conversation = [],
             "Responda de forma clara, útil e concisa.",
             "Use apenas informações da página extraída.",
             "Nunca invente dados que não estejam disponíveis.",
-            "Máximo 2-3 frases por resposta.",
-            "Respeite a LGPD - não mencione informações sensíveis."
+            "Máximo 2-3 frases por resposta."
         ];
         if (salesMode) {
             systemLines.push("Tom consultivo e entusiasmado.");
@@ -583,7 +529,7 @@ function generateLocalResponse(userMessage, pageData = {}, instructions = '') {
     const salesMode = shouldActivateSalesMode(instructions);
 
     if (/preço|valor|quanto custa/.test(question)) {
-        return 'Informações sobre preços não são exibidas diretamente. Consulte o link da página para mais detalhes.';
+        return 'Para informações sobre preços, consulte diretamente a página do produto.';
     }
 
     if (/como funciona|funcionamento/.test(question)) {
@@ -621,7 +567,6 @@ app.get('/health', (req, res) => {
         uptime: Math.floor(uptime),
         timestamp: new Date().toISOString(),
         version: '6.0.0',
-        lgpdCompliant: true,
         analytics: {
             totalRequests: analytics.totalRequests,
             chatRequests: analytics.chatRequests,
@@ -636,173 +581,132 @@ app.get('/health', (req, res) => {
         services: {
             groq: !!process.env.GROQ_API_KEY,
             openai: !!process.env.OPENAI_API_KEY,
-            puppeteer: !!puppeteer,
-            complianceManager: true
-        },
-        compliance: {
-            robotsVerification: true,
-            consentLogging: true,
-            dataSubjectRights: true,
-            privacyByDesign: true
+            puppeteer: !!puppeteer
         }
     });
 });
 
-app.get('/analytics', complianceManager.rateLimitMiddleware(), (req, res) => {
-    const uptimeMs = Date.now() - analytics.startTime;
-    const avgResponseTime = analytics.responseTimeHistory.length > 0 ?
-        Math.round(analytics.responseTimeHistory.reduce((a, b) => a + b, 0) / analytics.responseTimeHistory.length) : 0;
-    res.json({
-        overview: {
-            totalRequests: analytics.totalRequests,
-            chatRequests: analytics.chatRequests,
-            extractRequests: analytics.extractRequests,
-            errorCount: analytics.errors,
-            errorRate: analytics.totalRequests > 0 ? Math.round((analytics.errors / analytics.totalRequests) * 100) + '%' : '0%',
-            activeChats: analytics.activeChats.size,
-            uptime: Math.floor(uptimeMs / 1000),
-            avgResponseTime,
-            successRate: analytics.extractRequests > 0 ? Math.round((analytics.successfulExtractions / analytics.extractRequests) * 100) + '%' : '100%'
-        },
-        performance: {
-            responseTimeHistory: analytics.responseTimeHistory.slice(-20),
-            cacheHits: dataCache.size,
-            memoryUsage: process.memoryUsage()
-        },
-        compliance: {
-            consentLogs: complianceManager.consentLogs.length,
-            deletionRequests: complianceManager.deletionRequests.length,
-            processingLogs: complianceManager.dataProcessingLogs.length
-        }
-    });
+// ROTA PRINCIPAL - Serve o index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// /extract endpoint with LGPD compliance
-app.post('/extract', 
-    complianceManager.rateLimitMiddleware(),
-    complianceManager.robotsComplianceMiddleware(),
-    async (req, res) => {
-        analytics.extractRequests++;
-        try {
-            const { url, instructions, robotName, consentGranted } = req.body || {};
-            if (!url) return res.status(400).json({ success: false, error: 'URL é obrigatório' });
-            
-            // Verifica consentimento
-            if (!consentGranted) {
-                return res.status(403).json({ 
-                    success: false, 
-                    error: 'Consentimento necessário para extração de dados',
-                    requiresConsent: true 
-                });
-            }
+// ROTA CHAT.HTML - Que o frontend espera
+app.get('/chat.html', (req, res) => {
+    const robotName = req.query.name || 'Assistente IA';
+    const url = req.query.url || '';
+    const instructions = req.query.instructions || '';
+    
+    // Redireciona para a rota do chatbot
+    res.redirect(`/chatbot?name=${encodeURIComponent(robotName)}&url=${encodeURIComponent(url)}&instructions=${encodeURIComponent(instructions)}`);
+});
 
-            try { new URL(url); } catch (urlErr) { 
-                return res.status(400).json({ success: false, error: 'URL inválido' }); 
-            }
-
-            logger.info(`Starting LGPD compliant extraction for URL: ${url}`);
-            const extractedData = await extractPageData(url, req);
-            
-            if (instructions) extractedData.custom_instructions = instructions;
-            if (robotName) extractedData.robot_name = robotName;
-
-            // Remove campos sensíveis antes de enviar
-            hidePriceFields(extractedData);
-
-            // Adiciona informações de compliance
-            extractedData.compliance = {
-                lgpdCompliant: true,
-                consentRequired: true,
-                robotsVerified: req.robotsCompliance?.allowed || false,
-                processingBasis: 'consent'
-            };
-
-            return res.json({ success: true, data: extractedData });
-
-        } catch (error) {
-            analytics.errors++;
-            logger.error('Extract endpoint error:', error.message || error);
-            return res.status(500).json({ 
+// /extract endpoint CORRIGIDO
+app.post('/extract', async (req, res) => {
+    analytics.extractRequests++;
+    try {
+        const { url, instructions, robotName } = req.body || {};
+        
+        console.log('📥 Recebendo requisição para extrair:', url);
+        
+        if (!url) {
+            return res.status(400).json({ 
                 success: false, 
-                error: 'Erro interno ao extrair página',
-                compliance: { lgpdCompliant: true, errorLogged: true }
+                error: 'URL é obrigatório' 
             });
         }
-    }
-);
 
-// /chat-universal endpoint with LGPD compliance
-app.post('/chat-universal', 
-    complianceManager.rateLimitMiddleware(),
-    async (req, res) => {
-        analytics.chatRequests++;
-        try {
-            const { message, pageData, url, conversationId, instructions = '', robotName } = req.body || {};
-            if (!message) return res.status(400).json({ success: false, error: 'Mensagem é obrigatória' });
-
-            if (conversationId) {
-                analytics.activeChats.add(conversationId);
-                setTimeout(() => analytics.activeChats.delete(conversationId), 30 * 60 * 1000);
-            }
-
-            let processedPageData = pageData;
-            if (!processedPageData && url) {
-                processedPageData = await extractPageData(url, req);
-            }
-
-            // Remove dados sensíveis
-            if (processedPageData) hidePriceFields(processedPageData);
-
-            const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions);
-
-            let finalResponse = aiResponse;
-            if (processedPageData?.url && !String(finalResponse).includes(processedPageData.url)) {
-                finalResponse = `${finalResponse}\n\n${processedPageData.url}`;
-            }
-
-            return res.json({
-                success: true,
-                response: finalResponse,
-                bonuses_detected: processedPageData?.bonuses_detected || [],
-                metadata: {
-                    hasPageData: !!processedPageData,
-                    contentLength: processedPageData?.cleanText?.length || 0,
-                    method: processedPageData?.method || 'none',
-                    lgpdCompliant: true
-                }
-            });
-
-        } catch (error) {
-            analytics.errors++;
-            logger.error('Chat endpoint error:', error.message || error);
-            return res.status(500).json({ 
+        // Validação básica de URL
+        try { 
+            new URL(url); 
+        } catch (urlErr) { 
+            return res.status(400).json({ 
                 success: false, 
-                error: 'Erro interno ao gerar resposta',
-                compliance: { lgpdCompliant: true, errorLogged: true }
+                error: 'URL inválido' 
+            }); 
+        }
+
+        logger.info(`Starting extraction for URL: ${url}`);
+        
+        const extractedData = await extractPageData(url);
+        
+        if (instructions) extractedData.custom_instructions = instructions;
+        if (robotName) extractedData.robot_name = robotName;
+
+        console.log('✅ Extração concluída com sucesso');
+        
+        return res.json({ 
+            success: true, 
+            data: extractedData 
+        });
+
+    } catch (error) {
+        analytics.errors++;
+        console.error('❌ Erro no endpoint /extract:', error);
+        logger.error('Extract endpoint error:', error.message || error);
+        
+        return res.status(500).json({ 
+            success: false, 
+            error: 'Erro interno ao extrair página: ' + (error.message || 'Erro desconhecido')
+        });
+    }
+});
+
+// /chat-universal endpoint CORRIGIDO
+app.post('/chat-universal', async (req, res) => {
+    analytics.chatRequests++;
+    try {
+        const { message, pageData, url, conversationId, instructions = '', robotName } = req.body || {};
+        
+        if (!message) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Mensagem é obrigatória' 
             });
         }
-    }
-);
 
-// API para relatório de compliance (admin only)
-app.get('/api/compliance-report', 
-    complianceManager.rateLimitMiddleware(),
-    async (req, res) => {
-        try {
-            const { startDate, endDate } = req.query;
-            const report = await complianceManager.generateComplianceReport(startDate, endDate);
-            res.json({ success: true, report });
-        } catch (error) {
-            logger.error('Compliance report error:', error);
-            res.status(500).json({ success: false, error: 'Erro ao gerar relatório' });
+        if (conversationId) {
+            analytics.activeChats.add(conversationId);
+            setTimeout(() => analytics.activeChats.delete(conversationId), 30 * 60 * 1000);
         }
-    }
-);
 
-// Widget JS with LGPD compliance
+        let processedPageData = pageData;
+        if (!processedPageData && url) {
+            processedPageData = await extractPageData(url);
+        }
+
+        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions);
+
+        let finalResponse = aiResponse;
+        if (processedPageData?.url && !String(finalResponse).includes(processedPageData.url)) {
+            finalResponse = `${finalResponse}\n\n${processedPageData.url}`;
+        }
+
+        return res.json({
+            success: true,
+            response: finalResponse,
+            bonuses_detected: processedPageData?.bonuses_detected || [],
+            metadata: {
+                hasPageData: !!processedPageData,
+                contentLength: processedPageData?.cleanText?.length || 0,
+                method: processedPageData?.method || 'none'
+            }
+        });
+
+    } catch (error) {
+        analytics.errors++;
+        logger.error('Chat endpoint error:', error.message || error);
+        return res.status(500).json({ 
+            success: false, 
+            error: 'Erro interno ao gerar resposta: ' + (error.message || 'Erro desconhecido')
+        });
+    }
+});
+
+// Widget JS
 app.get('/widget.js', (req, res) => {
     res.set('Content-Type', 'application/javascript');
-    res.send(`// LinkMágico Widget v6.0 - LGPD Compliant
+    res.send(`// LinkMágico Widget v6.0
 (function() {
     'use strict';
     if (window.LinkMagicoWidget) return;
@@ -810,13 +714,11 @@ app.get('/widget.js', (req, res) => {
     var LinkMagicoWidget = {
         config: {
             position: 'bottom-right',
-            primaryColor: '#667eea',
+            primaryColor: '#3b82f6',
             robotName: 'Assistente IA',
             salesUrl: '',
             instructions: '',
-            apiBase: window.location.origin,
-            lgpdCompliant: true,
-            requireConsent: true
+            apiBase: window.location.origin
         },
         
         init: function(userConfig) {
@@ -835,25 +737,14 @@ app.get('/widget.js', (req, res) => {
             this.addStyles();
             document.body.appendChild(container);
             this.bindEvents();
-            this.addConsentNotice();
-        },
-        
-        addConsentNotice: function() {
-            var notice = document.createElement('div');
-            notice.style.cssText = 'position:fixed;bottom:10px;left:20px;background:rgba(0,0,0,0.8);color:white;padding:0.5rem;border-radius:8px;font-size:0.8rem;z-index:999998;max-width:200px;';
-            notice.innerHTML = 'Este chat respeita a LGPD. <a href="/privacy" target="_blank" style="color:#60a5fa;">Política</a>';
-            document.body.appendChild(notice);
-            setTimeout(function(){ notice.style.display = 'none'; }, 5000);
         },
         
         getHTML: function() {
             return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +
                    '<div class="lm-chat" id="lm-chat" style="display:none;">' +
-                   '<div class="lm-header"><span>' + this.config.robotName + '</span>' +
-                   '<span style="font-size:0.7rem;opacity:0.8;">🛡️ LGPD</span>' +
-                   '<button id="lm-close">×</button></div>' +
+                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +
                    '<div class="lm-messages" id="lm-messages">' +
-                   '<div class="lm-msg lm-bot">Olá! Como posso ajudar? Este chat é seguro e respeita seus dados pessoais.</div></div>' +
+                   '<div class="lm-msg lm-bot">Olá! Como posso ajudar?</div></div>' +
                    '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';
         },
         
@@ -902,7 +793,6 @@ app.get('/widget.js', (req, res) => {
             if (input) input.value = '';
             var self = this;
             
-            // Log de interação para compliance
             fetch(this.config.apiBase + '/chat-universal', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -911,8 +801,7 @@ app.get('/widget.js', (req, res) => {
                     robotName: this.config.robotName,
                     instructions: this.config.instructions,
                     url: this.config.salesUrl,
-                    conversationId: 'widget_' + Date.now(),
-                    lgpdCompliant: true
+                    conversationId: 'widget_' + Date.now()
                 })
             }).then(function(r){ return r.json(); })
             .then(function(d){ 
@@ -939,7 +828,7 @@ app.get('/widget.js', (req, res) => {
 `);
 });
 
-// Chatbot HTML endpoint with LGPD compliance
+// Chatbot HTML endpoint
 function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customInstructions = '') {
     const escapedPageData = JSON.stringify(pageData || {});
     const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
@@ -951,7 +840,7 @@ function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customI
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>LinkMágico Chatbot - ${safeRobotName}</title>
-<meta name="description" content="Chatbot IA com conformidade LGPD - ${safeRobotName}"/>
+<meta name="description" content="Chatbot IA - ${safeRobotName}"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 <style>
@@ -960,7 +849,6 @@ body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #66
 .chat-container { background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); border-radius: 20px; width: 100%; max-width: 600px; height: 90vh; max-height: 700px; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.15); overflow: hidden; }
 .chat-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
 .chat-header h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 5px; }
-.lgpd-badge { background: rgba(255,255,255,0.2); padding: 0.3rem 0.8rem; border-radius: 15px; font-size: 0.7rem; margin-top: 0.5rem; display: inline-block; }
 .chat-messages { flex: 1; padding: 20px; overflow-y: auto; background: linear-gradient(to bottom, #f9fafb, white); }
 .message { margin-bottom: 15px; display: flex; align-items: flex-end; gap: 10px; }
 .message .message-avatar { width: 40px; height: 40px; border-radius: 50%; background: #f3f4f6; display:flex; align-items:center; justify-content:center; color:#374151; }
@@ -969,9 +857,6 @@ body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #66
 .chat-input { padding: 20px; background: white; border-top: 1px solid #e5e7eb; display:flex; gap:10px; align-items:center; }
 .message-input { flex: 1; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 0.9rem; }
 .send-btn { width: 44px; height: 44px; border: none; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); color: white; cursor: pointer; display:flex; align-items:center; justify-content:center; }
-.privacy-footer { padding: 10px 20px; background: #f8fafc; border-top: 1px solid #e5e7eb; text-align: center; font-size: 0.8rem; color: #6b7280; }
-.privacy-footer a { color: #667eea; text-decoration: none; }
-@media (max-width: 768px) { .chat-container { height: 100vh; border-radius: 0; } }
 </style>
 </head>
 <body>
@@ -979,7 +864,6 @@ body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #66
     <div class="chat-header">
         <h1>${safeRobotName}</h1>
         <p>Assistente Inteligente para Vendas</p>
-        <div class="lgpd-badge">🛡️ Conforme LGPD</div>
     </div>
     <div class="chat-messages" id="chatMessages">
         <div class="message bot">
@@ -990,9 +874,6 @@ body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #66
     <div class="chat-input">
         <input id="messageInput" class="message-input" placeholder="Digite sua pergunta..." maxlength="500" />
         <button id="sendBtn" class="send-btn"><i class="fas fa-paper-plane"></i></button>
-    </div>
-    <div class="privacy-footer">
-        🛡️ Seus dados estão protegidos pela LGPD | <a href="/privacy" target="_blank">Política de Privacidade</a> | <a href="/data-deletion" target="_blank">Exclusão de Dados</a>
     </div>
 </div>
 
@@ -1036,8 +917,7 @@ async function sendMessage() {
                 pageData: pageData, 
                 robotName: robotName, 
                 conversationId: conversationId, 
-                instructions: instructions,
-                lgpdCompliant: true
+                instructions: instructions
             })
         });
         
@@ -1062,26 +942,12 @@ document.getElementById('sendBtn').onclick = sendMessage;
 document.getElementById('messageInput').onkeypress = function(e){ 
     if (e.key === 'Enter') sendMessage(); 
 };
-
-// Log inicial para compliance
-fetch('/api/log-consent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        timestamp: new Date().toISOString(),
-        url: window.location.href,
-        robotName: robotName,
-        consent: true,
-        source: 'chatbot_access',
-        version: '1.0'
-    })
-}).catch(console.error);
 </script>
 </body>
 </html>`;
 }
 
-// Rota principal do chatbot
+// Rota do chatbot
 app.get('/chatbot', async (req, res) => {
     try {
         const robotName = req.query.name || 'Assistente IA';
@@ -1091,14 +957,11 @@ app.get('/chatbot', async (req, res) => {
         let pageData = {};
         if (url) {
             try { 
-                pageData = await extractPageData(url, req); 
+                pageData = await extractPageData(url); 
             } catch (e) { 
                 logger.warn('Failed to extract for chatbot UI:', e.message || e); 
             }
         }
-
-        // Remove campos sensíveis
-        if (pageData) hidePriceFields(pageData);
 
         const html = generateChatbotHTML(pageData, robotName, instructions);
         res.set('Content-Type', 'text/html; charset=utf-8').send(html);
@@ -1108,8 +971,15 @@ app.get('/chatbot', async (req, res) => {
     }
 });
 
+// Rota de fallback para qualquer outra requisição
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // 🔥 ESSENCIAL no Render: ouvir na porta do ambiente
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Servidor LinkMágico v6.0 rodando na porta ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔧 Ambiente: ${process.env.NODE_ENV || 'development'}`);
 });
