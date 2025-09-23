@@ -157,6 +157,25 @@
             color: var(--success);
         }
         
+        .lgpd-badge {
+            cursor: pointer;
+            background: rgba(59, 130, 246, 0.1);
+            padding: 0.6rem 1.2rem;
+            border-radius: 24px;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--primary-light);
+        }
+        
+        .lgpd-badge:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        
         /* Main Container */
         .main-container {
             max-width: 1200px;
@@ -804,6 +823,217 @@
             background: var(--primary);
         }
         
+        /* Privacy Footer */
+        .privacy-footer {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.8);
+            border-top: 1px solid var(--glass-border);
+            margin-top: 2rem;
+            font-size: 0.8rem;
+            color: var(--dark-text-muted);
+        }
+        
+        .privacy-footer a {
+            color: var(--primary-light);
+            text-decoration: none;
+        }
+        
+        .privacy-footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Consent Modal */
+        .consent-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .consent-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+        
+        .consent-content {
+            background: var(--dark-surface);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            max-width: 500px;
+            width: 100%;
+            position: relative;
+            z-index: 1001;
+            box-shadow: var(--shadow-xl);
+            overflow: hidden;
+        }
+        
+        .consent-header {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+        
+        .consent-header h3 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease;
+        }
+        
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .consent-body {
+            padding: 1.5rem;
+        }
+        
+        .consent-warning {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .consent-warning i {
+            color: var(--warning);
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        
+        .consent-details p {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .consent-details ul {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--dark-text-secondary);
+        }
+        
+        .legal-basis {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--primary);
+            padding: 0.5rem 1rem;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            color: var(--primary-light);
+        }
+        
+        .url-verification {
+            margin: 1.5rem 0;
+        }
+        
+        .url-verification label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .robots-check {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--dark-text-muted);
+            font-style: italic;
+        }
+        
+        .consent-footer {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .btn-secondary {
+            flex: 1;
+            padding: 1rem;
+            border: 1px solid var(--dark-border);
+            background: transparent;
+            color: var(--dark-text);
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: var(--dark-elevated);
+        }
+        
+        .btn-primary-consent {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            background: var(--gradient-primary);
+            color: white;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-consent:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-primary-consent:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .legal-links {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+        }
+        
+        .legal-links a {
+            color: var(--primary-light);
+            text-decoration: none;
+        }
+        
+        .legal-links a:hover {
+            text-decoration: underline;
+        }
+        
         /* Responsive */
         @media (max-width: 1024px) {
             .main-container {
@@ -864,6 +1094,10 @@
             .chat-preview {
                 height: 320px;
             }
+            
+            .consent-footer {
+                flex-direction: column;
+            }
         }
         
         @media (max-width: 480px) {
@@ -890,17 +1124,13 @@
                     <div class="version-badge">Nova Geração</div>
                 </div>
             </div>
-            <div class="status-indicator">
-                <div class="status-dot"></div>
-                <span class="status-text">Sistema Online</span>
-            </div>
-                <div style="display: flex; align-items: center;">
-                    <div class="status-indicator">
-                        <div class="status-dot"></div>
-                        <span class="status-text">Sistema Online</span>
-                    </div>
-                    <div class="lgpd-badge">🛡️ Conforme LGPD</div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span class="status-text">Sistema Online</span>
                 </div>
+                <div class="lgpd-badge" id="btnLgpd">🛡️ Conforme LGPD</div>
+            </div>
         </div>
     </header>
 
@@ -1156,6 +1386,51 @@
     document.head.appendChild(script);
 })();
 &lt;/script&gt;</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Footer (LGPD) -->
+    <div class="privacy-footer" id="privacyFooter" role="region" aria-label="Privacidade">
+        <small>Protegemos seus dados — <a href="/privacy.html" id="privacyLink">Política de Privacidade</a> • <a href="/excluir-dados" id="deleteLink">Excluir Dados</a></small>
+    </div>
+
+    <!-- Consent Modal (LGPD) -->
+    <div class="consent-modal" id="consentModal" aria-hidden="true" role="dialog" aria-labelledby="consentTitle" style="display:none;">
+        <div class="consent-backdrop"></div>
+        <div class="consent-content" role="document">
+            <div class="consent-header">
+                <h3 id="consentTitle">Preferências de Privacidade</h3>
+                <button class="close-btn" id="consentClose" aria-label="Fechar">&times;</button>
+            </div>
+            <div class="consent-body">
+                <div class="consent-warning">
+                    <i class="fas fa-shield-alt"></i>
+                    <p>Para continuar usando o LinkMágico, precisamos do seu consentimento para processar dados pessoais conforme a LGPD.</p>
+                </div>
+                <div class="consent-details">
+                    <p>Usamos informações para:</p>
+                    <ul>
+                        <li>Personalizar respostas do chatbot</li>
+                        <li>Melhorar métricas e analytics</li>
+                        <li>Garantir segurança e prevenir fraudes</li>
+                    </ul>
+                    <div class="legal-basis">
+                        Base legal: Consentimento do titular (Art. 7º, LGPD).
+                    </div>
+                    <div class="url-verification">
+                        <label><input type="checkbox" id="confirmUrl" /> Confiro que a URL informada é de minha responsabilidade</label>
+                        <div class="robots-check"><small>Recomendado: verifique robots.txt e políticas da página antes de extrair dados.</small></div>
+                    </div>
+                </div>
+                <div class="consent-footer">
+                    <button class="btn-secondary" id="btnDecline">Recusar</button>
+                    <button class="btn-primary-consent" id="btnAccept" disabled>Aceitar e Continuar</button>
+                </div>
+                <div class="legal-links">
+                    <a href="/privacy.html" id="linkPolicy">Política de Privacidade</a> · 
+                    <a href="/excluir-dados" id="linkDelete">Excluir meus dados</a>
                 </div>
             </div>
         </div>
@@ -1458,123 +1733,92 @@
         });
     </script>
 
-<!-- Privacy Footer (LGPD) -->
-<div class="privacy-footer" id="privacyFooter" role="region" aria-label="Privacidade">
-    <small>Protegemos seus dados — <a href="/privacy.html" id="privacyLink">Política de Privacidade</a> • <a href="/excluir-dados" id="deleteLink">Excluir Dados</a></small>
-</div>
-
-
-<!-- Consent Modal (LGPD) -->
-<div class="consent-modal" id="consentModal" aria-hidden="true" role="dialog" aria-labelledby="consentTitle" style="display:none;">
-    <div class="consent-backdrop"></div>
-    <div class="consent-content" role="document">
-        <div class="consent-header">
-            <h3 id="consentTitle">Preferências de Privacidade</h3>
-            <button class="close-btn" id="consentClose" aria-label="Fechar">&times;</button>
-        </div>
-        <div class="consent-body">
-            <div class="consent-warning">
-                <i class="fas fa-shield-alt"></i>
-                <p>Para continuar usando o LinkMágico, precisamos do seu consentimento para processar dados pessoais conforme a LGPD.</p>
-            </div>
-            <div class="consent-details">
-                <p>Usamos informações para:</p>
-                <ul>
-                    <li>Personalizar respostas do chatbot</li>
-                    <li>Melhorar métricas e analytics</li>
-                    <li>Garantir segurança e prevenir fraudes</li>
-                </ul>
-                <div class="legal-basis">
-                    Base legal: Consentimento do titular (Art. 7º, LGPD).
-                </div>
-                <div class="url-verification">
-                    <label><input type="checkbox" id="confirmUrl" /> Confiro que a URL informada é de minha responsabilidade</label>
-                    <div class="robots-check"><small>Recomendado: verifique robots.txt e políticas da página antes de extrair dados.</small></div>
-                </div>
-            </div>
-            <div class="consent-footer">
-                <button class="btn-secondary" id="btnDecline">Recusar</button>
-                <button class="btn-primary-consent" id="btnAccept" disabled>Aceitar e Continuar</button>
-            </div>
-            <div class="legal-links">
-                <a href="/privacy.html" id="linkPolicy">Política de Privacidade</a> · 
-                <a href="/excluir-dados" id="linkDelete">Excluir meus dados</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<script>
-// LGPD Consent handling (stores consent in localStorage and logs to console)
-(function() {
-    function showConsent() {
-        var modal = document.getElementById('consentModal');
-        if (!modal) return;
-        modal.style.display = 'flex';
-        modal.setAttribute('aria-hidden', 'false');
-    }
-    function hideConsent() {
-        var modal = document.getElementById('consentModal');
-        if (!modal) return;
-        modal.style.display = 'none';
-        modal.setAttribute('aria-hidden', 'true');
-    }
-
-    var consentKey = 'linkmagico_lgpd_consent_v1';
-    var accepted = localStorage.getItem(consentKey);
-
-    document.addEventListener('DOMContentLoaded', function() {
-        var btnAccept = document.getElementById('btnAccept');
-        var btnDecline = document.getElementById('btnDecline');
-        var closeBtn = document.getElementById('consentClose');
-        var confirmUrl = document.getElementById('confirmUrl');
-        var privacyFooter = document.getElementById('privacyFooter');
-
-        if (!btnAccept || !btnDecline || !closeBtn || !confirmUrl) return;
-
-        // enable accept only when checkbox is checked
-        confirmUrl.addEventListener('change', function() {
-            btnAccept.disabled = !confirmUrl.checked;
-        });
-
-        btnAccept.addEventListener('click', function() {
-            localStorage.setItem(consentKey, JSON.stringify({consent: true, ts: Date.now(), url: window.location.href}));
-            console.info('LGPD consent accepted', {consent: true, ts: Date.now(), url: window.location.href});
-            hideConsent();
-        });
-
-        btnDecline.addEventListener('click', function() {
-            localStorage.setItem(consentKey, JSON.stringify({consent: false, ts: Date.now(), url: window.location.href}));
-            console.info('LGPD consent declined', {consent: false, ts: Date.now(), url: window.location.href});
-            hideConsent();
-        });
-
-        closeBtn.addEventListener('click', function() {
-            // close without giving consent (treat as declined for tracking purposes)
-            localStorage.setItem(consentKey, JSON.stringify({consent: false, ts: Date.now(), url: window.location.href}));
-            hideConsent();
-        });
-
-        // if no consent recorded, show modal
-        try {
-            if (!accepted) {
-                showConsent();
-            } else {
-                var parsed = JSON.parse(accepted);
-                if (!parsed || parsed.consent !== true) {
-                    showConsent();
-                } else {
-                    // consent already given, keep privacy footer visible
-                    if (privacyFooter) privacyFooter.style.display = 'block';
-                }
+    <script>
+        // LGPD Consent handling (stores consent in localStorage and logs to console)
+        (function() {
+            function showConsent() {
+                var modal = document.getElementById('consentModal');
+                if (!modal) return;
+                modal.style.display = 'flex';
+                modal.setAttribute('aria-hidden', 'false');
             }
-        } catch (e) {
-            showConsent();
-        }
-    });
-})();
-</script>
+            function hideConsent() {
+                var modal = document.getElementById('consentModal');
+                if (!modal) return;
+                modal.style.display = 'none';
+                modal.setAttribute('aria-hidden', 'true');
+            }
+
+            var consentKey = 'linkmagico_lgpd_consent_v1';
+            var accepted = localStorage.getItem(consentKey);
+
+            document.addEventListener('DOMContentLoaded', function() {
+                var btnAccept = document.getElementById('btnAccept');
+                var btnDecline = document.getElementById('btnDecline');
+                var closeBtn = document.getElementById('consentClose');
+                var confirmUrl = document.getElementById('confirmUrl');
+                var privacyFooter = document.getElementById('privacyFooter');
+
+                if (!btnAccept || !btnDecline || !closeBtn || !confirmUrl) return;
+
+                // enable accept only when checkbox is checked
+                confirmUrl.addEventListener('change', function() {
+                    btnAccept.disabled = !confirmUrl.checked;
+                });
+
+                btnAccept.addEventListener('click', function() {
+                    localStorage.setItem(consentKey, JSON.stringify({consent: true, ts: Date.now(), url: window.location.href}));
+                    console.info('LGPD consent accepted', {consent: true, ts: Date.now(), url: window.location.href});
+                    hideConsent();
+                });
+
+                btnDecline.addEventListener('click', function() {
+                    localStorage.setItem(consentKey, JSON.stringify({consent: false, ts: Date.now(), url: window.location.href}));
+                    console.info('LGPD consent declined', {consent: false, ts: Date.now(), url: window.location.href});
+                    hideConsent();
+                });
+
+                closeBtn.addEventListener('click', function() {
+                    // close without giving consent (treat as declined for tracking purposes)
+                    localStorage.setItem(consentKey, JSON.stringify({consent: false, ts: Date.now(), url: window.location.href}));
+                    hideConsent();
+                });
+
+                // if no consent recorded, show modal
+                try {
+                    if (!accepted) {
+                        showConsent();
+                    } else {
+                        var parsed = JSON.parse(accepted);
+                        if (!parsed || parsed.consent !== true) {
+                            showConsent();
+                        } else {
+                            // consent already given, keep privacy footer visible
+                            if (privacyFooter) privacyFooter.style.display = 'block';
+                        }
+                    }
+                } catch (e) {
+                    showConsent();
+                }
+            });
+        })();
+    </script>
+
+    <script>
+        // Botão LGPD - Abrir modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const btn = document.querySelector('#btnLgpd, .lgpd-badge, .lgpd-button'); 
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    const modal = document.getElementById('consentModal');
+                    if (modal) {
+                        modal.style.display = 'flex';
+                        modal.setAttribute('aria-hidden', 'false');
+                    }
+                });
+            }
+        });
+    </script>
 
 </body>
 </html>
