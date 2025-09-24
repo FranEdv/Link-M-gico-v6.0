@@ -1,3 +1,5 @@
+// server.js - LinkMágico v6.0 ();
+
 // server.js - LinkMágico v6.0 Server Corrigido
 require('dotenv').config();
 
@@ -543,7 +545,7 @@ function generateLocalResponse(userMessage, pageData = {}, instructions = '') {
     if (/bônus|bonus/.test(question)) {
         if (pageData.bonuses_detected && pageData.bonuses_detected.length > 0) {
             const bonuses = pageData.bonuses_detected.slice(0, 2).join(', ');
-            return salesMode ? `Inclui: ${bonuses}. Quer garantir todos os bônus?` : `Bônus: ${bonuses}`;
+            return salesMode ? `Inclui: ${bonus}. Quer garantir todos os bônus?` : `Bônus: ${bonuses}`;
         }
         return 'Informações sobre bônus não encontradas.';
     }
@@ -599,6 +601,28 @@ app.get('/chat.html', (req, res) => {
     
     // Redireciona para a rota do chatbot
     res.redirect(`/chatbot?name=${encodeURIComponent(robotName)}&url=${encodeURIComponent(url)}&instructions=${encodeURIComponent(instructions)}`);
+});
+
+// ===== ROTAS CORRIGIDAS PARA OS LINKS =====
+
+// Rota para Política de Privacidade (arquivo .html)
+app.get('/privacy.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
+// Rota para Excluir Dados (arquivo .html)
+app.get('/excluir-dados', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
+});
+
+// Rota para Política de Privacidade (alternativa)
+app.get('/privacy-policy', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
+// Rota para Excluir Dados (alternativa)
+app.get('/delete-data', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
 });
 
 // /extract endpoint CORRIGIDO
@@ -834,7 +858,7 @@ function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customI
     const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
     const safeInstructions = String(customInstructions || '').replace(/"/g, '\\"');
 
-  return `<!doctype html>
+    return `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
@@ -854,8 +878,8 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%
 .chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
 .chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
 .chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
-.chat-input-container{padding:20px;background:white;border-top:1px solid #e2e8f0;display:flex;gap:10px}
-.chat-input{flex:1;border:1px solid #e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
+.chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px}
+.chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
 .chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
 .send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
 .send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
@@ -979,26 +1003,31 @@ app.get('/chatbot', async (req, res) => {
     }
 });
 
-// ===== ROTAS LGPD (ADICIONE ISSO) =====
+// ===== ROTAS LGPD CORRIGIDAS =====
 
-// Rota para Política de Privacidade
+// Rota para Política de Privacidade (arquivo .html)
+app.get('/privacy.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
+// Rota para Excluir Dados (arquivo .html)
+app.get('/excluir-dados', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
+});
+
+// Rota para Política de Privacidade (alternativa)
 app.get('/privacy-policy', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'privacy_policy_page.html'));
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
-// Rota para Excluir Dados
+// Rota para Excluir Dados (alternativa)
 app.get('/delete-data', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'data_deletion_form.html'));
+    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
 });
 
-// Rota para Modal de Consentimento (se necessário)
-app.get('/consent-modal', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'consent_modal_component.html'));
-});
+// ===== FIM DAS ROTAS LGPD =====
 
-// ===== FIM DAS NOVAS ROTAS =====
-
-// Rota de fallback para qualquer outra requisição (JÁ EXISTE)
+// Rota de fallback para qualquer outra requisição
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -1010,6 +1039,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`📊 Health check disponível em: http://localhost:${PORT}/health`);
     logger.info(`🤖 Chatbot disponível em: http://localhost:${PORT}/chatbot`);
     logger.info(`🔧 Widget JS disponível em: http://localhost:${PORT}/widget.js`);
+    logger.info(`📄 Política de Privacidade disponível em: http://localhost:${PORT}/privacy.html`);
+    logger.info(`🗑️ Exclusão de Dados disponível em: http://localhost:${PORT}/excluir-dados`);
 });
 
 // Graceful shutdown
