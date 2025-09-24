@@ -1,5 +1,3 @@
-// server.js - LinkMágico v6.0 ();
-
 // server.js - LinkMágico v6.0 Server Corrigido
 require('dotenv').config();
 
@@ -545,7 +543,7 @@ function generateLocalResponse(userMessage, pageData = {}, instructions = '') {
     if (/bônus|bonus/.test(question)) {
         if (pageData.bonuses_detected && pageData.bonuses_detected.length > 0) {
             const bonuses = pageData.bonuses_detected.slice(0, 2).join(', ');
-            return salesMode ? `Inclui: ${bonus}. Quer garantir todos os bônus?` : `Bônus: ${bonuses}`;
+            return salesMode ? `Inclui: ${bonuses}. Quer garantir todos os bônus?` : `Bônus: ${bonuses}`;
         }
         return 'Informações sobre bônus não encontradas.';
     }
@@ -601,28 +599,6 @@ app.get('/chat.html', (req, res) => {
     
     // Redireciona para a rota do chatbot
     res.redirect(`/chatbot?name=${encodeURIComponent(robotName)}&url=${encodeURIComponent(url)}&instructions=${encodeURIComponent(instructions)}`);
-});
-
-// ===== ROTAS CORRIGIDAS PARA OS LINKS =====
-
-// Rota para Política de Privacidade (arquivo .html)
-app.get('/privacy.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
-});
-
-// Rota para Excluir Dados (arquivo .html)
-app.get('/excluir-dados', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
-});
-
-// Rota para Política de Privacidade (alternativa)
-app.get('/privacy-policy', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
-});
-
-// Rota para Excluir Dados (alternativa)
-app.get('/delete-data', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
 });
 
 // /extract endpoint CORRIGIDO
@@ -847,6 +823,8 @@ app.get('/widget.js', (req, res) => {
         }
     };
     
+        };
+    
     window.LinkMagicoWidget = LinkMagicoWidget;
 })();
 `);
@@ -1003,25 +981,29 @@ app.get('/chatbot', async (req, res) => {
     }
 });
 
-// ===== ROTAS LGPD CORRIGIDAS =====
+// ===== ROTAS LGPD CORRIGIDAS - SERVIÇO DOS ARQUIVOS EXISTENTES =====
 
-// Rota para Política de Privacidade (arquivo .html)
+// Rota para Política de Privacidade (arquivo existente)
 app.get('/privacy.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
-// Rota para Excluir Dados (arquivo .html)
+// Rota para Excluir Dados (arquivo existente)
 app.get('/excluir-dados', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
 });
 
-// Rota para Política de Privacidade (alternativa)
+// Rotas alternativas para compatibilidade
 app.get('/privacy-policy', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
-// Rota para Excluir Dados (alternativa)
 app.get('/delete-data', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
+});
+
+// Rota para Data Deletion (alternativa em inglês)
+app.get('/data-deletion', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
 });
 
