@@ -842,112 +842,119 @@ function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customI
 <title>LinkMágico Chatbot - ${safeRobotName}</title>
 <meta name="description" content="Chatbot IA - ${safeRobotName}"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 15px; }
-.chat-container { background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); border-radius: 20px; width: 100%; max-width: 600px; height: 90vh; max-height: 700px; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.15); overflow: hidden; }
-.chat-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
-.chat-header h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 5px; }
-.chat-messages { flex: 1; padding: 20px; overflow-y: auto; background: linear-gradient(to bottom, #f9fafb, white); }
-.message { margin-bottom: 15px; display: flex; align-items: flex-end; gap: 10px; }
-.message .message-avatar { width: 40px; height: 40px; border-radius: 50%; background: #f3f4f6; display:flex; align-items:center; justify-content:center; color:#374151; }
-.message .message-content { background: #fff; padding: 12px 14px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.04); max-width: 80%; }
-.message.user .message-content { background: linear-gradient(135deg,#667eea,#764ba2); color: white; }
-.chat-input { padding: 20px; background: white; border-top: 1px solid #e5e7eb; display:flex; gap:10px; align-items:center; }
-.message-input { flex: 1; padding: 12px 16px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 0.9rem; }
-.send-btn { width: 44px; height: 44px; border: none; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); color: white; cursor: pointer; display:flex; align-items:center; justify-content:center; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
+.chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative}
+.chat-header h1{font-size:1.5rem;font-weight:600}
+.chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px}
+.chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc}
+.chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
+.chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
+.chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
+.chat-input-container{padding:20px;background:white;border-top:1px solid #e2e8f0;display:flex;gap:10px}
+.chat-input{flex:1;border:1px solid #e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
+.chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+.send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
+.send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
+.send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+.typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px}
+.typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite}
+.typing-dot:nth-child(2){animation-delay:0.2s}
+.typing-dot:nth-child(3){animation-delay:0.4s}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+@media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}}
 </style>
 </head>
 <body>
 <div class="chat-container">
-    <div class="chat-header">
-        <h1>${safeRobotName}</h1>
-        <p>Assistente Inteligente para Vendas</p>
-    </div>
-    <div class="chat-messages" id="chatMessages">
-        <div class="message bot">
-            <div class="message-avatar"><i class="fas fa-robot"></i></div>
-            <div class="message-content">Olá! Sou o ${safeRobotName}. Como posso te ajudar hoje?</div>
-        </div>
-    </div>
-    <div class="chat-input">
-        <input id="messageInput" class="message-input" placeholder="Digite sua pergunta..." maxlength="500" />
-        <button id="sendBtn" class="send-btn"><i class="fas fa-paper-plane"></i></button>
-    </div>
+<div class="chat-header">
+<h1>${safeRobotName}</h1>
+<div class="subtitle">IA Assistente - LinkMágico v6.0</div>
 </div>
-
+<div class="chat-messages" id="chatMessages">
+<div class="chat-message bot">Olá! Sou ${safeRobotName}, seu assistente de IA. Como posso ajudar você hoje?</div>
+</div>
+<div class="chat-input-container">
+<input type="text" class="chat-input" id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off">
+<button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button>
+</div>
+<div class="typing-indicator" id="typingIndicator">
+<span>Digitando</span>
+<div class="typing-dot"></div>
+<div class="typing-dot"></div>
+<div class="typing-dot"></div>
+</div>
+</div>
 <script>
 const pageData = ${escapedPageData};
 const robotName = "${safeRobotName}";
-const instructions = "${safeInstructions}";
-const conversationId = 'chat_' + Date.now();
+const customInstructions = "${safeInstructions}";
 
-function addMessage(content, isUser) {
-    const container = document.getElementById('chatMessages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message ' + (isUser ? 'user' : 'bot');
-    const avatar = document.createElement('div'); 
-    avatar.className = 'message-avatar';
-    avatar.innerHTML = isUser ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
-    const contentDiv = document.createElement('div'); 
-    contentDiv.className = 'message-content';
-    contentDiv.textContent = content;
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
-    container.appendChild(messageDiv);
-    container.scrollTop = container.scrollHeight;
+const chatMessages = document.getElementById('chatMessages');
+const messageInput = document.getElementById('messageInput');
+const sendButton = document.getElementById('sendButton');
+const typingIndicator = document.getElementById('typingIndicator');
+
+function addMessage(text, isUser = false) {
+const messageDiv = document.createElement('div');
+messageDiv.className = \`chat-message \${isUser ? 'user' : 'bot'}\`;
+messageDiv.textContent = text;
+chatMessages.appendChild(messageDiv);
+chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 async function sendMessage() {
-    const input = document.getElementById('messageInput');
-    const message = input.value.trim();
-    if (!message) return;
-    
-    document.getElementById('sendBtn').disabled = true;
-    addMessage(message, true);
-    input.value = '';
-    
-    try {
-        const response = await fetch('/chat-universal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: message, 
-                pageData: pageData, 
-                robotName: robotName, 
-                conversationId: conversationId, 
-                instructions: instructions
-            })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            let reply = data.response;
-            if (data.bonuses_detected && data.bonuses_detected.length > 0) {
-                reply += "\\n\\nBônus inclusos: " + data.bonuses_detected.slice(0,3).join(", ");
-            }
-            addMessage(reply, false);
-        } else { 
-            addMessage('Desculpe, ocorreu um erro. Tente novamente.', false); 
-        }
-    } catch (err) {
-        addMessage('Erro de conexão. Tente novamente.', false);
-    } finally {
-        document.getElementById('sendBtn').disabled = false;
-    }
+const message = messageInput.value.trim();
+if (!message) return;
+
+addMessage(message, true);
+messageInput.value = '';
+sendButton.disabled = true;
+typingIndicator.style.display = 'flex';
+
+try {
+const response = await fetch('/chat-universal', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+message: message,
+pageData: pageData,
+robotName: robotName,
+instructions: customInstructions,
+conversationId: 'chatbot_' + Date.now()
+})
+});
+
+const data = await response.json();
+if (data.success) {
+addMessage(data.response, false);
+} else {
+addMessage('Desculpe, ocorreu um erro. Tente novamente.', false);
+}
+} catch (error) {
+addMessage('Erro de conexão. Verifique sua internet.', false);
+} finally {
+typingIndicator.style.display = 'none';
+sendButton.disabled = false;
+messageInput.focus();
+}
 }
 
-document.getElementById('sendBtn').onclick = sendMessage;
-document.getElementById('messageInput').onkeypress = function(e){ 
-    if (e.key === 'Enter') sendMessage(); 
-};
+sendButton.addEventListener('click', sendMessage);
+messageInput.addEventListener('keypress', (e) => {
+if (e.key === 'Enter') sendMessage();
+});
+
+messageInput.focus();
 </script>
 </body>
 </html>`;
 }
 
-// Rota do chatbot
+// Chatbot route
 app.get('/chatbot', async (req, res) => {
     try {
         const robotName = req.query.name || 'Assistente IA';
@@ -956,30 +963,70 @@ app.get('/chatbot', async (req, res) => {
         
         let pageData = {};
         if (url) {
-            try { 
-                pageData = await extractPageData(url); 
-            } catch (e) { 
-                logger.warn('Failed to extract for chatbot UI:', e.message || e); 
+            try {
+                pageData = await extractPageData(url);
+            } catch (extractError) {
+                console.warn('Failed to extract page data:', extractError.message || extractError);
             }
         }
-
+        
         const html = generateChatbotHTML(pageData, robotName, instructions);
-        res.set('Content-Type', 'text/html; charset=utf-8').send(html);
-    } catch (err) {
-        logger.error('Chatbot HTML generation error:', err.message || err);
-        res.status(500).send('<h3>Erro ao gerar interface do chatbot</h3>');
+        res.set('Content-Type', 'text/html');
+        res.send(html);
+    } catch (error) {
+        logger.error('Chatbot route error:', error.message || error);
+        res.status(500).send('Erro interno ao gerar chatbot');
     }
 });
 
-// Rota de fallback para qualquer outra requisição
+// ===== ROTAS LGPD (ADICIONE ISSO) =====
+
+// Rota para Política de Privacidade
+app.get('/privacy-policy', (req, res) => {
+    res.sendFile(path.join(__dirname, 'pages', 'privacy_policy_page.html'));
+});
+
+// Rota para Excluir Dados
+app.get('/delete-data', (req, res) => {
+    res.sendFile(path.join(__dirname, 'pages', 'data_deletion_form.html'));
+});
+
+// Rota para Modal de Consentimento (se necessário)
+app.get('/consent-modal', (req, res) => {
+    res.sendFile(path.join(__dirname, 'pages', 'consent_modal_component.html'));
+});
+
+// ===== FIM DAS NOVAS ROTAS =====
+
+// Rota de fallback para qualquer outra requisição (JÁ EXISTE)
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 🔥 ESSENCIAL no Render: ouvir na porta do ambiente
+// ===== Server startup =====
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Servidor LinkMágico v6.0 rodando na porta ${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🔧 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`🚀 LinkMágico Server v6.0 rodando na porta ${PORT}`);
+    logger.info(`📊 Health check disponível em: http://localhost:${PORT}/health`);
+    logger.info(`🤖 Chatbot disponível em: http://localhost:${PORT}/chatbot`);
+    logger.info(`🔧 Widget JS disponível em: http://localhost:${PORT}/widget.js`);
 });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+        logger.info('Process terminated');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    logger.info('SIGINT received, shutting down gracefully');
+    server.close(() => {
+        logger.info('Process terminated');
+        process.exit(0);
+    });
+});
+
+module.exports = app;
