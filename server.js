@@ -834,7 +834,7 @@ function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customI
     const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
     const safeInstructions = String(customInstructions || '').replace(/"/g, '\\"');
 
-    return `<!doctype html>
+  return `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
