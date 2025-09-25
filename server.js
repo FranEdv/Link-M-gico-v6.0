@@ -1,3 +1,7 @@
+// server.js - LinkMágico v6.0 Server Corrigido
+require('dotenv').config();
+
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -820,6 +824,8 @@ app.get('/widget.js', (req, res) => {
         }
     };
     
+        };
+    
     window.LinkMagicoWidget = LinkMagicoWidget;
 })();
 `);
@@ -831,7 +837,7 @@ function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customI
     const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
     const safeInstructions = String(customInstructions || '').replace(/"/g, '\\"');
 
-  return `<!doctype html>
+    return `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
@@ -851,8 +857,8 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%
 .chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
 .chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
 .chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
-.chat-input-container{padding:20px;background:white;border-top:1px solid #e2e8f0;display:flex;gap:10px}
-.chat-input{flex:1;border:1px solid #e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
+.chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px}
+.chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
 .chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
 .send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
 .send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
@@ -976,26 +982,335 @@ app.get('/chatbot', async (req, res) => {
     }
 });
 
-// ===== ROTAS LGPD (ADICIONE ISSO) =====
+// ===== ROTAS LGPD CORRIGIDAS - CONTEÚDO DINÂMICO =====
 
-// Rota para Política de Privacidade
+// Política de Privacidade - Conteúdo dinâmico
+app.get('/privacy.html', (req, res) => {
+    const privacyHTML = generatePrivacyPolicyHTML();
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(privacyHTML);
+});
+
+// Exclusão de Dados - Conteúdo dinâmico  
+app.get('/excluir-dados', (req, res) => {
+    const deletionHTML = generateDataDeletionHTML();
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(deletionHTML);
+});
+
+// Rotas alternativas para compatibilidade
 app.get('/privacy-policy', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'privacy_policy_page.html'));
+    res.redirect('/privacy.html');
 });
 
-// Rota para Excluir Dados
 app.get('/delete-data', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'data_deletion_form.html'));
+    res.redirect('/excluir-dados');
 });
 
-// Rota para Modal de Consentimento (se necessário)
-app.get('/consent-modal', (req, res) => {
-    res.sendFile(path.join(__dirname, 'pages', 'consent_modal_component.html'));
+app.get('/data-deletion', (req, res) => {
+    res.redirect('/excluir-dados');
 });
 
-// ===== FIM DAS NOVAS ROTAS =====
+// APIs de Compliance
+app.post('/api/log-consent', (req, res) => {
+    try {
+        const consentData = req.body;
+        const ipHash = hashIP(req.ip || req.connection.remoteAddress || 'unknown');
+        
+        const logEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            consent: consentData,
+            ipHash,
+            userAgent: req.headers['user-agent'] || 'unknown',
+            referer: req.headers.referer || '',
+        };
 
-// Rota de fallback para qualquer outra requisição (JÁ EXISTE)
+        // Log para arquivo
+        const logDir = path.join(__dirname, 'logs', 'consent');
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir, { recursive: true });
+        }
+        
+        const logFile = path.join(logDir, `consent-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}.log`);
+        fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
+
+        logger.info(`Consentimento registrado: ${logEntry.id}`);
+        res.json({ success: true, consentId: logEntry.id });
+        
+    } catch (error) {
+        logger.error('Erro ao registrar consentimento:', error);
+        res.status(500).json({ error: 'Falha ao registrar consentimento' });
+    }
+});
+
+app.post('/api/data-deletion', (req, res) => {
+    try {
+        const requestData = req.body;
+        const requestId = crypto.randomUUID();
+        const ipHash = hashIP(req.ip || req.connection.remoteAddress || 'unknown');
+        
+        const deletionRequest = {
+            id: requestId,
+            timestamp: new Date().toISOString(),
+            email: requestData.email,
+            robotName: requestData.robotName,
+            url: requestData.url,
+            requestType: requestData.requestType,
+            dataTypes: requestData.dataTypes,
+            reason: requestData.reason,
+            status: 'pending',
+            ipHash,
+            userAgent: req.headers['user-agent'] || 'unknown',
+            processingDeadline: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
+        };
+
+        // Log para arquivo
+        const logDir = path.join(__dirname, 'logs', 'deletion');
+        if (!fs.existsSync(logDir)) {
+            fs.mkdirSync(logDir, { recursive: true });
+        }
+        
+        const logFile = path.join(logDir, `deletion-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}.log`);
+        fs.appendFileSync(logFile, JSON.stringify(deletionRequest) + '\n');
+
+        logger.info(`Solicitação de exclusão registrada: ${requestId}`);
+        res.json({ 
+            success: true, 
+            requestId,
+            message: 'Solicitação recebida. Será processada em até 72 horas.' 
+        });
+        
+    } catch (error) {
+        logger.error('Erro ao processar solicitação de exclusão:', error);
+        res.status(500).json({ error: 'Falha ao processar solicitação' });
+    }
+});
+
+// Funções auxiliares
+function hashIP(ip) {
+    if (!ip) return 'unknown';
+    return crypto.createHash('sha256').update(ip + (process.env.IP_SALT || 'default_salt')).digest('hex').substring(0, 16);
+}
+
+// Gerador de HTML da Política de Privacidade
+function generatePrivacyPolicyHTML() {
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política de Privacidade - LinkMágico v6.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --dark: #0f172a;
+            --dark-surface: #1e293b;
+            --dark-text: #f8fafc;
+            --dark-text-secondary: #cbd5e1;
+            --glass-bg: rgba(30, 41, 59, 0.8);
+            --glass-border: rgba(148, 163, 184, 0.2);
+            --gradient-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--gradient-bg); color: var(--dark-text); line-height: 1.6; margin: 0; padding: 0; min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+        .header { text-align: center; margin-bottom: 3rem; padding: 2rem; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; backdrop-filter: blur(20px); }
+        .header h1 { color: var(--dark-text); margin-bottom: 0.5rem; font-size: 2rem; }
+        .content { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 3rem; backdrop-filter: blur(20px); }
+        .section { margin-bottom: 2rem; }
+        .section h2 { color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        .back-btn { display: inline-block; background: var(--primary); color: white; padding: 1rem 2rem; border-radius: 10px; text-decoration: none; margin-top: 2rem; transition: all 0.2s; }
+        .back-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Política de Privacidade</h1>
+            <p>LinkMágico v6.0 - Tratamento de Dados Pessoais conforme LGPD</p>
+        </div>
+        <div class="content">
+            <div class="section">
+                <h2>1. Informações Gerais</h2>
+                <p>Esta Política de Privacidade descreve como o LinkMágico v6.0 coleta, usa, armazena e protege suas informações pessoais, em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD - Lei nº 13.709/2018).</p>
+            </div>
+            <div class="section">
+                <h2>2. Dados Coletados</h2>
+                <ul>
+                    <li><strong>Dados de configuração:</strong> Nome do assistente virtual, URL da página, instruções personalizadas</li>
+                    <li><strong>Dados de navegação:</strong> Endereço IP (hash), tipo de navegador, sistema operacional</li>
+                    <li><strong>Dados de consentimento:</strong> Registro de autorização para extração de dados</li>
+                    <li><strong>Dados extraídos:</strong> Conteúdo público de páginas (processamento temporário)</li>
+                </ul>
+            </div>
+            <div class="section">
+                <h2>3. Base Legal e Finalidades</h2>
+                <p><strong>Bases legais (Art. 7º LGPD):</strong></p>
+                <ul>
+                    <li><strong>Consentimento:</strong> Para extração e processamento de dados de URLs</li>
+                    <li><strong>Legítimo interesse:</strong> Para melhoria dos serviços e analytics</li>
+                    <li><strong>Execução de contrato:</strong> Para fornecimento do serviço de chatbot</li>
+                </ul>
+            </div>
+            <div class="section">
+                <h2>4. Seus Direitos (Art. 18 LGPD)</h2>
+                <ul>
+                    <li><strong>Confirmação e acesso:</strong> Saber se tratamos seus dados e acessá-los</li>
+                    <li><strong>Correção:</strong> Corrigir dados incompletos, inexatos ou desatualizados</li>
+                    <li><strong>Eliminação:</strong> Solicitar exclusão de dados desnecessários</li>
+                    <li><strong>Portabilidade:</strong> Receber seus dados em formato estruturado</li>
+                    <li><strong>Revogação do consentimento:</strong> Retirar consentimento a qualquer momento</li>
+                </ul>
+            </div>
+            <div class="section">
+                <h2>5. Segurança dos Dados</h2>
+                <ul>
+                    <li>Criptografia de dados em trânsito (TLS/SSL)</li>
+                    <li>Hash de endereços IP (nunca armazenamos IPs brutos)</li>
+                    <li>Controles de acesso baseados em funções</li>
+                    <li>Monitoramento e logs de segurança</li>
+                    <li>Processamento temporário (dados não armazenados permanentemente)</li>
+                </ul>
+            </div>
+            <div class="section">
+                <h2>6. Contato</h2>
+                <p><strong>Encarregado de Dados (DPO):</strong><br>
+                E-mail: dpo@linkmagico.com<br>
+                Para exercer seus direitos ou esclarecer dúvidas sobre privacidade.</p>
+            </div>
+            <a href="/" class="back-btn">← Voltar para o LinkMágico</a>
+        </div>
+    </div>
+</body>
+</html>`;
+}
+
+// Gerador de HTML do Formulário de Exclusão
+function generateDataDeletionHTML() {
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exclusão de Dados - LinkMágico v6.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --error: #ef4444; --dark: #0f172a; --dark-surface: #1e293b; --dark-text: #f8fafc; --dark-text-secondary: #cbd5e1; --glass-bg: rgba(30, 41, 59, 0.8); --glass-border: rgba(148, 163, 184, 0.2); --gradient-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--gradient-bg); color: var(--dark-text); line-height: 1.6; margin: 0; padding: 0; min-height: 100vh; }
+        .container { max-width: 600px; margin: 0 auto; padding: 2rem; }
+        .header { text-align: center; margin-bottom: 2rem; padding: 2rem; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; backdrop-filter: blur(20px); }
+        .form-container { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 2rem; backdrop-filter: blur(20px); }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-label { display: block; color: var(--dark-text); font-weight: 600; margin-bottom: 0.5rem; }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 0.875rem 1rem; border: 2px solid var(--dark-surface); border-radius: 10px; background: var(--dark-surface); color: var(--dark-text); font-size: 0.9rem; transition: all 0.3s ease; box-sizing: border-box; }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+        .checkbox-group { display: flex; align-items: flex-start; gap: 0.75rem; margin: 1.5rem 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 10px; }
+        .btn { flex: 1; padding: 1rem; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-size: 0.9rem; }
+        .btn-cancel { background: transparent; border: 2px solid var(--dark-surface); color: var(--dark-text); }
+        .btn-danger { background: linear-gradient(135deg, var(--error), #dc2626); color: white; }
+        .buttons { display: flex; gap: 1rem; margin-top: 2rem; }
+        .success-message { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--success); padding: 1.5rem; border-radius: 12px; margin: 1.5rem 0; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗑️ Exclusão de Dados Pessoais</h1>
+            <p>Solicite a remoção completa dos seus dados conforme seus direitos na LGPD</p>
+        </div>
+        <div class="form-container">
+            <form id="deletionForm">
+                <div class="form-group">
+                    <label for="email" class="form-label">E-mail *</label>
+                    <input type="email" id="email" name="email" class="form-input" placeholder="seu@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="robotName" class="form-label">Nome do Assistente Virtual</label>
+                    <input type="text" id="robotName" name="robotName" class="form-input" placeholder="@nome.do.bot (opcional)">
+                </div>
+                <div class="form-group">
+                    <label for="url" class="form-label">URL da Página</label>
+                    <input type="url" id="url" name="url" class="form-input" placeholder="https://exemplo.com (opcional)">
+                </div>
+                <div class="form-group">
+                    <label for="requestType" class="form-label">O que você deseja? *</label>
+                    <select id="requestType" name="requestType" class="form-select" required>
+                        <option value="">Selecione uma opção</option>
+                        <option value="delete_all">Exclusão completa de todos os dados</option>
+                        <option value="delete_specific">Exclusão de dados específicos</option>
+                        <option value="access_data">Acesso aos meus dados (portabilidade)</option>
+                        <option value="revoke_consent">Revogação de consentimento</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reason" class="form-label">Motivo da solicitação (opcional)</label>
+                    <textarea id="reason" name="reason" class="form-textarea" placeholder="Descreva o motivo da sua solicitação..."></textarea>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="confirmDeletion" name="confirmDeletion" required>
+                    <label for="confirmDeletion"><strong>Confirmo que entendo</strong> que esta ação resultará na exclusão permanente dos dados solicitados e que não poderá ser desfeita.</label>
+                </div>
+                <div class="buttons">
+                    <a href="/" class="btn btn-cancel">Cancelar</a>
+                    <button type="submit" class="btn btn-danger" id="submitBtn" disabled>Solicitar Exclusão</button>
+                </div>
+            </form>
+            <div class="success-message" id="successMessage">
+                <h4>✅ Solicitação Enviada</h4>
+                <p>Sua solicitação foi recebida e será processada em até 72 horas. Você receberá uma confirmação por e-mail quando concluída.</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const confirmCheckbox = document.getElementById('confirmDeletion');
+            const submitBtn = document.getElementById('submitBtn');
+            confirmCheckbox.addEventListener('change', function() {
+                submitBtn.disabled = !this.checked;
+            });
+            document.getElementById('deletionForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const email = document.getElementById('email').value.trim();
+                const requestType = document.getElementById('requestType').value;
+                if (!email || !requestType) {
+                    alert('Por favor, preencha todos os campos obrigatórios.');
+                    return;
+                }
+                const confirmMessage = requestType === 'delete_all' ? 'Tem certeza que deseja excluir TODOS os seus dados? Esta ação não pode ser desfeita.' : 'Tem certeza que deseja prosseguir com esta solicitação?';
+                if (!confirm(confirmMessage)) return;
+                try {
+                    const formData = {
+                        email: email,
+                        robotName: document.getElementById('robotName').value.trim(),
+                        url: document.getElementById('url').value.trim(),
+                        requestType: requestType,
+                        reason: document.getElementById('reason').value.trim(),
+                        timestamp: new Date().toISOString()
+                    };
+                    const response = await fetch('/api/data-deletion', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    if (!response.ok) throw new Error('Erro ao processar solicitação');
+                    document.getElementById('deletionForm').style.display = 'none';
+                    document.getElementById('successMessage').style.display = 'block';
+                } catch (error) {
+                    alert('Erro ao processar solicitação. Tente novamente ou entre em contato conosco.');
+                }
+            });
+        });
+    </script>
+</body>
+</html>`;
+}
+
+// ===== FIM DAS ROTAS LGPD =====
+
+// Rota de fallback para qualquer outra requisição
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -1007,6 +1322,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`📊 Health check disponível em: http://localhost:${PORT}/health`);
     logger.info(`🤖 Chatbot disponível em: http://localhost:${PORT}/chatbot`);
     logger.info(`🔧 Widget JS disponível em: http://localhost:${PORT}/widget.js`);
+    logger.info(`📄 Política de Privacidade disponível em: http://localhost:${PORT}/privacy.html`);
+    logger.info(`🗑️ Exclusão de Dados disponível em: http://localhost:${PORT}/excluir-dados`);
 });
 
 // Graceful shutdown
