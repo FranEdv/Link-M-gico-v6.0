@@ -1,6 +1,7 @@
 // server.js - LinkMágico v6.0 Server Corrigido
 require('dotenv').config();
 
+const { setupComplianceRoutes } = require('./compliance-middleware');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -40,6 +41,9 @@ const logger = winston.createLogger({
         })
     ]
 });
+
+// ===== Compliance Middleware Setup =====
+setupComplianceRoutes(app);
 
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', true);
