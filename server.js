@@ -84,7 +84,7 @@ const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
 
 // Rate limiting (multi-tenant)
 const tenantRateLimit = rateLimit({
-  store: new RedisStore({
+  store: RedisStore({
     // rate-limit-redis expects either a client or sendCommand implementation.
     // Using ioredis with sendCommand wrapper so it works reliably.
     sendCommand: (...args) => redisClient.call(...args)
