@@ -1,4 +1,4 @@
-// server.js - LinkMágico v6.0 Server Corrigido
+// LinkMágico v6.0 Commercial - Server Completo
 require('dotenv').config();
 
 const crypto = require('crypto');
@@ -10,10 +10,16 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const path = require('path');
 const fs = require('fs');
-const bodyParser = require('body-parser');
-const morgan = require('morgan');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+const bcrypt = require('bcrypt');
+const { v4: uuidv4 } = require('uuid');
+const Stripe = require('stripe');
 
-// Optional dependencies with graceful fallback
+// Initialize Stripe
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+
+// Optional Puppeteer
 let puppeteer = null;
 try {
     puppeteer = require('puppeteer');
@@ -38,6 +44,17 @@ const logger = winston.createLogger({
                 winston.format.colorize(),
                 winston.format.simple()
             )
+        }),
+        new winston.transports.File({ 
+            filename: 'logs/error.log', 
+            level: 'error',
+            maxsize: 5242880, // 5MB
+            maxFiles: 5
+        }),
+        new winston.transports.File({ 
+            filename: 'logs/combined.log',
+            maxsize: 5242880,
+            maxFiles: 5
         })
     ]
 });
@@ -45,98 +62,456 @@ const logger = winston.createLogger({
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', true);
 
-// ===== Middleware =====
+// ===== TENANT & API KEY MANAGEMENT =====
+class TenantManager {
+    constructor() {
+        this.tenants = new Map();
+        this.apiKeys = new Map();
+        this.loadTenants();
+    }
+
+    loadTenants() {
+        try {
+            const tenantsFile = path.join(__dirname, 'data', 'tenants.json');
+            if (fs.existsSync(tenantsFile)) {
+                const data = JSON.parse(fs.readFileSync(tenantsFile, 'utf8'));
+                data.forEach(tenant => {
+                    this.tenants.set(tenant.id, tenant);
+                    this.apiKeys.set(tenant.apiKey, tenant.id);
+                });
+                logger.info(`Loaded ${data.length} tenants`);
+            }
+        } catch (error) {
+            logger.error('Failed to load tenants:', error);
+        }
+    }
+
+    saveTenants() {
+        try {
+            const dataDir = path.join(__dirname, 'data');
+            if (!fs.existsSync(dataDir)) {
+                fs.mkdirSync(dataDir, { recursive: true });
+            }
+            
+            const tenantsArray = Array.from(this.tenants.values());
+            fs.writeFileSync(
+                path.join(dataDir, 'tenants.json'), 
+                JSON.stringify(tenantsArray, null, 2)
+            );
+        } catch (error) {
+            logger.error('Failed to save tenants:', error);
+        }
+    }
+
+    createTenant(data) {
+        const tenant = {
+            id: uuidv4(),
+            name: data.name,
+            email: data.email,
+            apiKey: this.generateApiKey(),
+            plan: data.plan || 'free',
+            limits: this.getPlanLimits(data.plan || 'free'),
+            usage: {
+                requests: 0,
+                tokens: 0,
+                chatbots: 0,
+                resetDate: new Date()
+            },
+            stripeCustomerId: data.stripeCustomerId || null,
+            createdAt: new Date(),
+            isActive: true,
+            domains: data.domains || [],
+            webhooks: data.webhooks || [],
+            settings: {
+                customCSS: '',
+                branding: true,
+                analytics: true
+            }
+        };
+
+        this.tenants.set(tenant.id, tenant);
+        this.apiKeys.set(tenant.apiKey, tenant.id);
+        this.saveTenants();
+        
+        logger.info(`Created tenant: ${tenant.name} (${tenant.id})`);
+        return tenant;
+    }
+
+    getTenantByApiKey(apiKey) {
+        const tenantId = this.apiKeys.get(apiKey);
+        return tenantId ? this.tenants.get(tenantId) : null;
+    }
+
+    getTenant(tenantId) {
+        return this.tenants.get(tenantId);
+    }
+
+    updateTenantUsage(tenantId, usage) {
+        const tenant = this.tenants.get(tenantId);
+        if (tenant) {
+            tenant.usage.requests += usage.requests || 0;
+            tenant.usage.tokens += usage.tokens || 0;
+            tenant.usage.chatbots += usage.chatbots || 0;
+            this.saveTenants();
+        }
+    }
+
+    checkLimits(tenant) {
+        const now = new Date();
+        const resetDate = new Date(tenant.usage.resetDate);
+        
+        // Reset monthly usage
+        if (now.getMonth() !== resetDate.getMonth() || 
+            now.getFullYear() !== resetDate.getFullYear()) {
+            tenant.usage.requests = 0;
+            tenant.usage.tokens = 0;
+            tenant.usage.resetDate = now;
+            this.saveTenants();
+        }
+
+        return {
+            requests: tenant.usage.requests < tenant.limits.requests,
+            tokens: tenant.usage.tokens < tenant.limits.tokens,
+            chatbots: tenant.usage.chatbots < tenant.limits.chatbots
+        };
+    }
+
+    generateApiKey() {
+        return 'lm_' + crypto.randomBytes(32).toString('hex');
+    }
+
+    getPlanLimits(plan) {
+        const plans = {
+            free: {
+                requests: 1000,
+                tokens: 50000,
+                chatbots: 3,
+                domains: 1,
+                customCSS: false,
+                analytics: false,
+                support: 'community'
+            },
+            starter: {
+                requests: 10000,
+                tokens: 500000,
+                chatbots: 10,
+                domains: 5,
+                customCSS: true,
+                analytics: true,
+                support: 'email'
+            },
+            pro: {
+                requests: 100000,
+                tokens: 5000000,
+                chatbots: 50,
+                domains: 25,
+                customCSS: true,
+                analytics: true,
+                support: 'priority'
+            },
+            enterprise: {
+                requests: -1, // unlimited
+                tokens: -1,
+                chatbots: -1,
+                domains: -1,
+                customCSS: true,
+                analytics: true,
+                support: 'dedicated'
+            }
+        };
+        return plans[plan] || plans.free;
+    }
+
+    generateWidgetToken(tenantId, domains = [], expiresIn = '30d') {
+        const payload = {
+            tenantId,
+            domains,
+            type: 'widget',
+            iat: Math.floor(Date.now() / 1000)
+        };
+
+        return jwt.sign(payload, process.env.JWT_SECRET || 'default-secret', { 
+            expiresIn 
+        });
+    }
+
+    verifyWidgetToken(token) {
+        try {
+            return jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
+        } catch (error) {
+            return null;
+        }
+    }
+}
+
+const tenantManager = new TenantManager();
+
+// ===== RATE LIMITING BY TENANT =====
+const createTenantRateLimit = (requests, windowMs = 15 * 60 * 1000) => {
+    return rateLimit({
+        windowMs,
+        limit: (req) => {
+            const tenant = req.tenant;
+            if (!tenant) return 10; // Guest limit
+            
+            const limits = tenantManager.checkLimits(tenant);
+            if (!limits.requests) return 0; // Exceeded
+            
+            return Math.min(requests, tenant.limits.requests);
+        },
+        keyGenerator: (req) => {
+            return req.tenant ? req.tenant.id : req.ip;
+        },
+        message: {
+            error: 'Rate limit exceeded',
+            retryAfter: Math.ceil(windowMs / 1000)
+        },
+        standardHeaders: true,
+        legacyHeaders: false
+    });
+};
+
+// ===== AUTHENTICATION MIDDLEWARE =====
+const authenticateApiKey = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        const apiKey = authHeader?.startsWith('Bearer ') 
+            ? authHeader.slice(7)
+            : req.headers['x-api-key'] || req.query.api_key;
+
+        if (!apiKey) {
+            return res.status(401).json({
+                error: 'API key required',
+                message: 'Provide API key in Authorization header or x-api-key'
+            });
+        }
+
+        const tenant = tenantManager.getTenantByApiKey(apiKey);
+        if (!tenant) {
+            return res.status(401).json({
+                error: 'Invalid API key',
+                message: 'API key not found or inactive'
+            });
+        }
+
+        if (!tenant.isActive) {
+            return res.status(403).json({
+                error: 'Account suspended',
+                message: 'Contact support to reactivate your account'
+            });
+        }
+
+        // Check limits
+        const limits = tenantManager.checkLimits(tenant);
+        if (!limits.requests) {
+            return res.status(429).json({
+                error: 'Usage limit exceeded',
+                message: 'Monthly request limit reached. Upgrade your plan.',
+                limits: tenant.limits,
+                usage: tenant.usage
+            });
+        }
+
+        req.tenant = tenant;
+        next();
+    } catch (error) {
+        logger.error('Authentication error:', error);
+        res.status(500).json({ error: 'Authentication failed' });
+    }
+};
+
+// Widget authentication middleware
+const authenticateWidget = (req, res, next) => {
+    try {
+        const token = req.headers['x-widget-token'] || req.query.token;
+        
+        if (!token) {
+            return res.status(401).json({
+                error: 'Widget token required'
+            });
+        }
+
+        const payload = tenantManager.verifyWidgetToken(token);
+        if (!payload) {
+            return res.status(401).json({
+                error: 'Invalid or expired widget token'
+            });
+        }
+
+        const tenant = tenantManager.getTenant(payload.tenantId);
+        if (!tenant || !tenant.isActive) {
+            return res.status(403).json({
+                error: 'Tenant not found or inactive'
+            });
+        }
+
+        // Verify domain if specified
+        if (payload.domains && payload.domains.length > 0) {
+            const referer = req.headers.referer || req.headers.origin;
+            if (referer) {
+                const refererDomain = new URL(referer).hostname;
+                const allowed = payload.domains.some(domain => {
+                    return domain === refererDomain || 
+                           refererDomain.endsWith('.' + domain);
+                });
+                
+                if (!allowed) {
+                    return res.status(403).json({
+                        error: 'Domain not authorized',
+                        allowedDomains: payload.domains
+                    });
+                }
+            }
+        }
+
+        req.tenant = tenant;
+        req.widgetPayload = payload;
+        next();
+    } catch (error) {
+        logger.error('Widget authentication error:', error);
+        res.status(500).json({ error: 'Widget authentication failed' });
+    }
+};
+
+// ===== MIDDLEWARE SETUP =====
 app.use(helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "https://api.stripe.com"]
+        }
+    },
     crossOriginEmbedderPolicy: false
 }));
 
 app.use(cors({
-    origin: ['https://link-m-gico-v6-0-hmpl.onrender.com', 'http://localhost:3000', 'http://localhost:8080'],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, etc.)
+        if (!origin) return callback(null, true);
+        
+        // Check if origin is from a tenant's allowed domains
+        const tenants = Array.from(tenantManager.tenants.values());
+        const allowed = tenants.some(tenant => 
+            tenant.domains.some(domain => 
+                origin.includes(domain) || origin.endsWith('.' + domain)
+            )
+        );
+        
+        // Always allow localhost and render.com for development
+        const devOrigins = ['localhost', 'render.com', '127.0.0.1'];
+        const isDev = devOrigins.some(dev => origin.includes(dev));
+        
+        callback(null, allowed || isDev);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Widget-Token', 'X-Requested-With']
 }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(bodyParser.json({ limit: '10mb' }));
 
-app.use(morgan('combined'));
+// Request logging
+app.use((req, res, next) => {
+    const start = Date.now();
+    
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        logger.info({
+            method: req.method,
+            url: req.url,
+            status: res.statusCode,
+            duration,
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            tenantId: req.tenant?.id
+        });
+        
+        // Update tenant usage
+        if (req.tenant) {
+            tenantManager.updateTenantUsage(req.tenant.id, { requests: 1 });
+        }
+    });
+    
+    next();
+});
 
-// Serve static files from public directory
+// Serve static files
 app.use(express.static('public', {
     maxAge: '1d',
     etag: true,
     lastModified: true
 }));
 
-// ===== Analytics & Cache =====
+// ===== ENHANCED ANALYTICS =====
 const analytics = {
     totalRequests: 0,
     chatRequests: 0,
     extractRequests: 0,
+    widgetRequests: 0,
     errors: 0,
     activeChats: new Set(),
     startTime: Date.now(),
     responseTimeHistory: [],
     successfulExtractions: 0,
-    failedExtractions: 0
+    failedExtractions: 0,
+    tokenUsage: 0,
+    tenantStats: new Map()
 };
 
-app.use((req, res, next) => {
-    const start = Date.now();
-    analytics.totalRequests++;
-
-    res.on('finish', () => {
-        const responseTime = Date.now() - start;
-        analytics.responseTimeHistory.push(responseTime);
-        if (analytics.responseTimeHistory.length > 100) analytics.responseTimeHistory.shift();
-        if (res.statusCode >= 400) analytics.errors++;
-    });
-
-    next();
-});
-
-const dataCache = new Map();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-
-function setCacheData(key, data) {
-    dataCache.set(key, { data, timestamp: Date.now() });
+// ===== LLM TOKEN TRACKING =====
+function estimateTokens(text) {
+    // Rough estimation: 1 token ≈ 4 characters for most models
+    return Math.ceil((text || '').length / 4);
 }
 
-function getCacheData(key) {
-    const cached = dataCache.get(key);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+function trackTokenUsage(tenantId, promptTokens, completionTokens) {
+    const total = promptTokens + completionTokens;
+    analytics.tokenUsage += total;
+    
+    if (tenantId) {
+        tenantManager.updateTenantUsage(tenantId, { tokens: total });
+        
+        if (!analytics.tenantStats.has(tenantId)) {
+            analytics.tenantStats.set(tenantId, {
+                requests: 0,
+                tokens: 0,
+                errors: 0
+            });
+        }
+        
+        const stats = analytics.tenantStats.get(tenantId);
+        stats.tokens += total;
+    }
+}
+
+// ===== CACHING SYSTEM =====
+const cache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+function setCache(key, data, ttl = CACHE_TTL) {
+    cache.set(key, { 
+        data, 
+        expires: Date.now() + ttl 
+    });
+}
+
+function getCache(key) {
+    const cached = cache.get(key);
+    if (cached && Date.now() < cached.expires) {
         return cached.data;
     }
-    dataCache.delete(key);
+    cache.delete(key);
     return null;
 }
 
-// ===== Utility functions =====
+// ===== EXTRACTION FUNCTIONS =====
 function normalizeText(text) {
     return (text || '').replace(/\s+/g, ' ').trim();
-}
-
-function uniqueLines(text) {
-    if (!text) return '';
-    const seen = new Set();
-    return text.split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .filter(line => {
-            if (seen.has(line)) return false;
-            seen.add(line);
-            return true;
-        })
-        .join('\n');
-}
-
-function clampSentences(text, maxSentences = 2) {
-    if (!text) return '';
-    const sentences = normalizeText(text).split(/(?<=[.!?])\s+/);
-    return sentences.slice(0, maxSentences).join(' ');
 }
 
 function extractBonuses(text) {
@@ -154,7 +529,6 @@ function extractBonuses(text) {
     return Array.from(new Set(bonuses));
 }
 
-// ===== Content extraction =====
 function extractCleanTextFromHTML(html) {
     try {
         const $ = cheerio.load(html || '');
@@ -186,20 +560,20 @@ function extractCleanTextFromHTML(html) {
     }
 }
 
-// ===== Page extraction =====
-async function extractPageData(url) {
+async function extractPageData(url, tenantId) {
     const startTime = Date.now();
+    const cacheKey = `extract:${url}:${tenantId}`;
+    
     try {
-        if (!url) throw new Error('URL is required');
-
-        const cacheKey = url;
-        const cached = getCacheData(cacheKey);
+        // Check cache first
+        const cached = getCache(cacheKey);
         if (cached) {
             logger.info(`Cache hit for ${url}`);
             return cached;
         }
         
         logger.info(`Starting extraction for: ${url}`);
+        analytics.extractRequests++;
 
         const extractedData = {
             title: '',
@@ -222,7 +596,7 @@ async function extractPageData(url) {
             logger.info('Attempting Axios + Cheerio extraction...');
             const response = await axios.get(url, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; LinkMagico-Bot/6.0; +https://link-m-gico-v6-0-hmpl.onrender.com)',
+                    'User-Agent': 'Mozilla/5.0 (compatible; LinkMagico-Bot/6.0; +https://linkmagico.com)',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
                 },
@@ -230,13 +604,16 @@ async function extractPageData(url) {
                 maxRedirects: 5,
                 validateStatus: status => status >= 200 && status < 400
             });
+            
             html = response.data || '';
             const finalUrl = response.request?.res?.responseUrl || url;
             if (finalUrl && finalUrl !== url) extractedData.url = finalUrl;
             extractedData.method = 'axios-cheerio';
             logger.info(`Axios extraction successful, HTML length: ${String(html).length}`);
+            analytics.successfulExtractions++;
         } catch (axiosError) {
             logger.warn(`Axios extraction failed for ${url}: ${axiosError.message || axiosError}`);
+            analytics.failedExtractions++;
         }
 
         if (html && html.length > 100) {
@@ -244,7 +621,7 @@ async function extractPageData(url) {
                 const $ = cheerio.load(html);
                 $('script, style, noscript, iframe').remove();
 
-                // Title
+                // Extract title
                 const titleSelectors = ['h1', 'meta[property="og:title"]', 'meta[name="twitter:title"]', 'title'];
                 for (const selector of titleSelectors) {
                     const el = $(selector).first();
@@ -255,7 +632,7 @@ async function extractPageData(url) {
                     }
                 }
 
-                // Description
+                // Extract description
                 const descSelectors = ['meta[name="description"]', 'meta[property="og:description"]', '.description', 'article p', 'main p'];
                 for (const selector of descSelectors) {
                     const el = $(selector).first();
@@ -267,23 +644,19 @@ async function extractPageData(url) {
                 }
 
                 extractedData.cleanText = extractCleanTextFromHTML(html);
-
                 const bodyText = $('body').text() || '';
                 const summaryText = bodyText.replace(/\s+/g, ' ').trim();
                 const sentences = summaryText.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
                 extractedData.summary = sentences.slice(0, 3).join('. ').substring(0, 400) + (sentences.length > 3 ? '...' : '');
-
                 extractedData.bonuses_detected = extractBonuses(bodyText);
 
                 logger.info(`Cheerio extraction completed for ${url}`);
-                analytics.successfulExtractions++;
             } catch (cheerioError) {
                 logger.warn(`Cheerio parsing failed: ${cheerioError.message || cheerioError}`);
-                analytics.failedExtractions++;
             }
         }
 
-        // Puppeteer fallback
+        // Puppeteer fallback for dynamic content
         const minAcceptableLength = 200;
         if ((!extractedData.cleanText || extractedData.cleanText.length < minAcceptableLength) && puppeteer) {
             logger.info('Trying Puppeteer for dynamic rendering...');
@@ -295,41 +668,33 @@ async function extractPageData(url) {
                     defaultViewport: { width: 1200, height: 800 },
                     timeout: 20000
                 });
+                
                 const page = await browser.newPage();
                 await page.setUserAgent('Mozilla/5.0 (compatible; LinkMagico-Bot/6.0)');
                 await page.setRequestInterception(true);
+                
                 page.on('request', (req) => {
                     const rt = req.resourceType();
                     if (['stylesheet', 'font', 'image', 'media'].includes(rt)) req.abort();
                     else req.continue();
                 });
 
-                try {
-                    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-                } catch (gotoErr) {
-                    logger.warn('Puppeteer goto failed:', gotoErr.message || gotoErr);
-                }
-
-                // Quick scroll for dynamic content
-                try {
-                    await page.evaluate(async () => {
-                        await new Promise((resolve) => {
-                            let total = 0;
-                            const dist = 300;
-                            const timer = setInterval(() => {
-                                window.scrollBy(0, dist);
-                                total += dist;
-                                if (total >= document.body.scrollHeight || total > 3000) {
-                                    clearInterval(timer);
-                                    resolve();
-                                }
-                            }, 100);
-                        });
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+                await page.evaluate(async () => {
+                    await new Promise((resolve) => {
+                        let total = 0;
+                        const dist = 300;
+                        const timer = setInterval(() => {
+                            window.scrollBy(0, dist);
+                            total += dist;
+                            if (total >= document.body.scrollHeight || total > 3000) {
+                                clearInterval(timer);
+                                resolve();
+                            }
+                        }, 100);
                     });
-                    await page.waitForTimeout(500);
-                } catch (scrollErr) {
-                    logger.warn('Puppeteer scroll failed:', scrollErr.message || scrollErr);
-                }
+                });
+                await page.waitForTimeout(500);
 
                 const puppeteerData = await page.evaluate(() => {
                     const clone = document.cloneNode(true);
@@ -343,18 +708,12 @@ async function extractPageData(url) {
                 });
 
                 const cleanedText = normalizeText(puppeteerData.bodyText || '').replace(/\s{2,}/g, ' ');
-                const lines = cleanedText.split('\n').map(l => l.trim()).filter(Boolean);
-                const uniq = [...new Set(lines)];
-                const finalText = uniq.join('\n');
-
-                if (finalText && finalText.length > (extractedData.cleanText || '').length) {
-                    extractedData.cleanText = finalText;
+                if (cleanedText && cleanedText.length > (extractedData.cleanText || '').length) {
+                    extractedData.cleanText = cleanedText;
                     extractedData.method = 'puppeteer';
                     if (!extractedData.title && puppeteerData.title) extractedData.title = puppeteerData.title.slice(0, 200);
                     if (!extractedData.description && puppeteerData.metaDescription) extractedData.description = puppeteerData.metaDescription.slice(0, 500);
-                    const sents = finalText.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
-                    if (!extractedData.summary && sents.length) extractedData.summary = sents.slice(0, 3).join('. ').substring(0, 400) + (sents.length > 3 ? '...' : '');
-                    extractedData.bonuses_detected = extractBonuses(finalText);
+                    extractedData.bonuses_detected = extractBonuses(cleanedText);
                     analytics.successfulExtractions++;
                 }
 
@@ -366,24 +725,11 @@ async function extractPageData(url) {
             }
         }
 
-        // Final processing
-        try {
-            if (extractedData.cleanText) extractedData.cleanText = uniqueLines(extractedData.cleanText);
-            if (!extractedData.title && extractedData.cleanText) {
-                const firstLine = extractedData.cleanText.split('\n').find(l => l && l.length > 10 && l.length < 150);
-                if (firstLine) extractedData.title = firstLine.slice(0, 150);
-            }
-            if (!extractedData.summary && extractedData.cleanText) {
-                const sents = extractedData.cleanText.split(/(?<=[.!?])\s+/).filter(Boolean);
-                extractedData.summary = sents.slice(0, 3).join('. ').slice(0, 400) + (sents.length > 3 ? '...' : '');
-            }
-        } catch (procErr) {
-            logger.warn('Final processing failed:', procErr.message || procErr);
-        }
-
         extractedData.extractionTime = Date.now() - startTime;
         
-        setCacheData(cacheKey, extractedData);
+        // Cache the result
+        setCache(cacheKey, extractedData);
+        
         logger.info(`Extraction completed for ${url} in ${extractedData.extractionTime}ms using ${extractedData.method}`);
         return extractedData;
 
@@ -409,8 +755,8 @@ async function extractPageData(url) {
     }
 }
 
-// ===== LLM Integration =====
-async function callGroq(messages, temperature = 0.4, maxTokens = 300) {
+// ===== LLM INTEGRATION WITH FALLBACK =====
+async function callGroq(messages, temperature = 0.4, maxTokens = 300, tenantId = null) {
     if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY missing');
 
     const payload = {
@@ -423,40 +769,127 @@ async function callGroq(messages, temperature = 0.4, maxTokens = 300) {
     const url = process.env.GROQ_API_BASE || 'https://api.groq.com/openai/v1/chat/completions';
     const headers = { 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' };
     const response = await axios.post(url, payload, { headers, timeout: 15000 });
-    if (!(response && response.status >= 200 && response.status < 300)) throw new Error(`GROQ API failed with status ${response?.status}`);
-    if (response.data?.choices?.[0]?.message?.content) return response.data.choices[0].message.content;
-    throw new Error('Invalid GROQ API response format');
+    
+    if (!(response && response.status >= 200 && response.status < 300)) {
+        throw new Error(`GROQ API failed with status ${response?.status}`);
+    }
+    
+    const result = response.data?.choices?.[0]?.message?.content;
+    if (!result) throw new Error('Invalid GROQ API response format');
+    
+    // Track token usage
+    const usage = response.data?.usage;
+    if (usage && tenantId) {
+        trackTokenUsage(tenantId, usage.prompt_tokens || 0, usage.completion_tokens || 0);
+    }
+    
+    return result;
 }
 
-async function callOpenAI(messages, temperature = 0.2, maxTokens = 300) {
+async function callOpenAI(messages, temperature = 0.2, maxTokens = 300, tenantId = null, model = null) {
     if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY missing');
 
-    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const selectedModel = model || process.env.OPENAI_MODEL || 'gpt-4o-mini';
     const url = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1/chat/completions';
-    const payload = { model, messages, temperature, max_tokens: maxTokens };
+    const payload = { model: selectedModel, messages, temperature, max_tokens: maxTokens };
     const headers = { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' };
+    
     const response = await axios.post(url, payload, { headers, timeout: 15000 });
-    if (!(response && response.status >= 200 && response.status < 300)) throw new Error(`OpenAI API failed with status ${response?.status}`);
-    if (response.data?.choices?.[0]?.message?.content) return response.data.choices[0].message.content;
-    throw new Error('Invalid OpenAI API response format');
+    
+    if (!(response && response.status >= 200 && response.status < 300)) {
+        throw new Error(`OpenAI API failed with status ${response?.status}`);
+    }
+    
+    const result = response.data?.choices?.[0]?.message?.content;
+    if (!result) throw new Error('Invalid OpenAI API response format');
+    
+    // Track token usage
+    const usage = response.data?.usage;
+    if (usage && tenantId) {
+        trackTokenUsage(tenantId, usage.prompt_tokens || 0, usage.completion_tokens || 0);
+    }
+    
+    return result;
 }
 
-// ===== Answer generation =====
-const NOT_FOUND_MSG = "Não encontrei essa informação específica na página. Posso te ajudar com outras dúvidas?";
-
-function shouldActivateSalesMode(instructions = '') {
-    if (!instructions) return false;
-    const text = String(instructions || '').toLowerCase();
-    return /sales_mode:on|consultivo|vendas|venda|cta|sempre.*link|finalize.*cta/i.test(text);
+// Smart model selection based on tenant plan and usage
+function selectOptimalModel(tenant, complexity = 'medium') {
+    if (!tenant) return { provider: 'local', model: null };
+    
+    const limits = tenantManager.checkLimits(tenant);
+    const tokensRemaining = tenant.limits.tokens - tenant.usage.tokens;
+    const tokensUsagePercent = tenant.usage.tokens / tenant.limits.tokens;
+    
+    // If approaching token limits (>80%), use cheaper models
+    if (tokensUsagePercent > 0.8 || tokensRemaining < 10000) {
+        if (process.env.GROQ_API_KEY) {
+            return { provider: 'groq', model: 'llama-3.1-8b-instant' };
+        }
+        return { provider: 'local', model: null };
+    }
+    
+    // Model selection based on tenant plan
+    switch (tenant.plan) {
+        case 'enterprise':
+        case 'pro':
+            if (complexity === 'high') {
+                return { provider: 'openai', model: 'gpt-4' };
+            }
+            return { provider: 'openai', model: 'gpt-4o-mini' };
+        
+        case 'starter':
+            return { provider: 'groq', model: 'llama-3.1-70b-versatile' };
+        
+        case 'free':
+        default:
+            return { provider: 'groq', model: 'llama-3.1-8b-instant' };
+    }
 }
 
-async function generateAIResponse(userMessage, pageData = {}, conversation = [], instructions = '') {
+// FAQ Cache for common questions
+const faqCache = new Map();
+
+function getFAQResponse(question, pageData) {
+    const normalizedQuestion = question.toLowerCase().trim();
+    const cacheKey = `faq:${normalizedQuestion}`;
+    
+    // Common FAQ patterns
+    const faqPatterns = [
+        { pattern: /preço|valor|quanto custa/i, response: 'Para informações sobre preços, consulte diretamente a página do produto.' },
+        { pattern: /como funciona|funcionamento/i, response: 'Vou explicar baseado nas informações da página...' },
+        { pattern: /bônus|bonus/i, response: null }, // Will be handled dynamically
+        { pattern: /garantia/i, response: 'Verifique os termos de garantia na página do produto.' },
+        { pattern: /suporte|ajuda|contato/i, response: 'Entre em contato através dos canais de suporte disponíveis na página.' },
+        { pattern: /entrega|prazo/i, response: 'Consulte as informações de prazo e entrega na página do produto.' }
+    ];
+    
+    for (const faq of faqPatterns) {
+        if (faq.pattern.test(normalizedQuestion)) {
+            if (faq.response) return faq.response;
+            break;
+        }
+    }
+    
+    return null;
+}
+
+async function generateAIResponse(userMessage, pageData = {}, conversation = [], instructions = '', tenant = null) {
     const startTime = Date.now();
     try {
-        const salesMode = shouldActivateSalesMode(instructions);
+        // Check FAQ cache first for common questions
+        const faqResponse = getFAQResponse(userMessage, pageData);
+        if (faqResponse && tenant?.plan === 'free') {
+            return faqResponse;
+        }
+        
+        // Determine complexity
+        const complexity = userMessage.length > 100 || instructions.includes('detailed') ? 'high' : 'medium';
+        const modelConfig = selectOptimalModel(tenant, complexity);
+        
+        const salesMode = /sales_mode:on|consultivo|vendas|venda|cta|sempre.*link|finalize.*cta/i.test(instructions);
 
         // Direct link handling
-        if (/\b(link|página|site|comprar|inscrever)\b/i.test(userMessage) && pageData && pageData.url) {
+        if (/\b(link|página|site|comprar|inscrever)\b/i.test(userMessage) && pageData?.url) {
             const url = pageData.url;
             if (salesMode) return `Aqui está o link oficial: ${url}\n\nQuer que eu te ajude com mais alguma informação sobre o produto?`;
             return `Aqui está o link: ${url}`;
@@ -469,43 +902,61 @@ async function generateAIResponse(userMessage, pageData = {}, conversation = [],
             "Nunca invente dados que não estejam disponíveis.",
             "Máximo 2-3 frases por resposta."
         ];
+        
         if (salesMode) {
             systemLines.push("Tom consultivo e entusiasmado.");
             systemLines.push("Termine com pergunta que leve à compra.");
         }
+        
         const systemPrompt = systemLines.join('\n');
 
         const contextLines = [];
         if (pageData.title) contextLines.push(`Produto: ${pageData.title}`);
-        if (pageData.bonuses_detected && pageData.bonuses_detected.length > 0) contextLines.push(`Bônus: ${pageData.bonuses_detected.slice(0, 3).join(', ')}`);
+        if (pageData.bonuses_detected && pageData.bonuses_detected.length > 0) {
+            contextLines.push(`Bônus: ${pageData.bonuses_detected.slice(0, 3).join(', ')}`);
+        }
+        
         const contentExcerpt = (pageData.summary || pageData.cleanText || '').slice(0, 1000);
         if (contentExcerpt) contextLines.push(`Informações: ${contentExcerpt}`);
 
         const pageContext = contextLines.join('\n');
         const userPrompt = `${instructions ? `Instruções: ${instructions}\n\n` : ''}Contexto:\n${pageContext}\n\nPergunta: ${userMessage}\n\nResponda de forma concisa usando apenas as informações fornecidas.`;
 
-        const messages = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }];
+        const messages = [
+            { role: 'system', content: systemPrompt }, 
+            { role: 'user', content: userPrompt }
+        ];
 
         let response = null;
         let usedProvider = 'local';
 
-        if (process.env.GROQ_API_KEY) {
+        // Try selected provider first
+        if (modelConfig.provider === 'openai' && process.env.OPENAI_API_KEY) {
             try {
-                response = await callGroq(messages, 0.4, 250);
+                response = await callOpenAI(messages, 0.2, 250, tenant?.id, modelConfig.model);
+                usedProvider = 'openai';
+                logger.info(`OpenAI API call successful with ${modelConfig.model}`);
+            } catch (openaiError) {
+                logger.warn(`OpenAI failed: ${openaiError.message || openaiError}`);
+            }
+        } else if (modelConfig.provider === 'groq' && process.env.GROQ_API_KEY) {
+            try {
+                response = await callGroq(messages, 0.4, 250, tenant?.id);
                 usedProvider = 'groq';
                 logger.info('GROQ API call successful');
             } catch (groqError) {
                 logger.warn(`GROQ failed: ${groqError.message || groqError}`);
-            }
-        }
-
-        if (!response && process.env.OPENAI_API_KEY) {
-            try {
-                response = await callOpenAI(messages, 0.2, 250);
-                usedProvider = 'openai';
-                logger.info('OpenAI API call successful');
-            } catch (openaiError) {
-                logger.warn(`OpenAI failed: ${openaiError.message || openaiError}`);
+                
+                // Fallback to OpenAI if GROQ fails
+                if (process.env.OPENAI_API_KEY) {
+                    try {
+                        response = await callOpenAI(messages, 0.2, 250, tenant?.id, 'gpt-4o-mini');
+                        usedProvider = 'openai-fallback';
+                        logger.info('OpenAI fallback successful');
+                    } catch (openaiError) {
+                        logger.warn(`OpenAI fallback failed: ${openaiError.message || openaiError}`);
+                    }
+                }
             }
         }
 
@@ -514,20 +965,37 @@ async function generateAIResponse(userMessage, pageData = {}, conversation = [],
             usedProvider = 'local';
         }
 
-        const finalResponse = clampSentences(String(response).trim(), 3);
+        const finalResponse = String(response).trim().slice(0, 800); // Limit response length
         const responseTime = Date.now() - startTime;
+        
+        // Update tenant analytics
+        if (tenant) {
+            if (!analytics.tenantStats.has(tenant.id)) {
+                analytics.tenantStats.set(tenant.id, { requests: 0, tokens: 0, errors: 0 });
+            }
+            analytics.tenantStats.get(tenant.id).requests++;
+        }
+        
         logger.info(`AI response generated in ${responseTime}ms using ${usedProvider}`);
         return finalResponse;
 
     } catch (error) {
         logger.error('AI response generation failed:', error.message || error);
-        return NOT_FOUND_MSG;
+        
+        if (tenant) {
+            if (!analytics.tenantStats.has(tenant.id)) {
+                analytics.tenantStats.set(tenant.id, { requests: 0, tokens: 0, errors: 0 });
+            }
+            analytics.tenantStats.get(tenant.id).errors++;
+        }
+        
+        return 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.';
     }
 }
 
 function generateLocalResponse(userMessage, pageData = {}, instructions = '') {
     const question = (userMessage || '').toLowerCase();
-    const salesMode = shouldActivateSalesMode(instructions);
+    const salesMode = /sales_mode:on|consultivo|vendas|venda|cta|sempre.*link|finalize.*cta/i.test(instructions);
 
     if (/preço|valor|quanto custa/.test(question)) {
         return 'Para informações sobre preços, consulte diretamente a página do produto.';
@@ -536,7 +1004,7 @@ function generateLocalResponse(userMessage, pageData = {}, instructions = '') {
     if (/como funciona|funcionamento/.test(question)) {
         const summary = pageData.summary || pageData.description;
         if (summary) {
-            const shortSummary = clampSentences(summary, 2);
+            const shortSummary = summary.split('.').slice(0, 2).join('.');
             return salesMode ? `${shortSummary} Quer saber mais detalhes?` : shortSummary;
         }
     }
@@ -550,14 +1018,178 @@ function generateLocalResponse(userMessage, pageData = {}, instructions = '') {
     }
 
     if (pageData.summary) {
-        const summary = clampSentences(pageData.summary, 2);
+        const summary = pageData.summary.split('.').slice(0, 2).join('.');
         return salesMode ? `${summary} Posso te ajudar com mais alguma dúvida?` : summary;
     }
 
-    return NOT_FOUND_MSG;
+    return 'Não encontrei essa informação específica na página. Posso te ajudar com outras dúvidas?';
 }
 
-// ===== API Routes =====
+// ===== BILLING & STRIPE INTEGRATION =====
+class BillingManager {
+    constructor() {
+        this.stripe = stripe;
+        this.plans = this.getPlans();
+    }
+
+    getPlans() {
+        return {
+            free: {
+                name: 'Free',
+                price: 0,
+                stripePriceId: null,
+                limits: tenantManager.getPlanLimits('free')
+            },
+            starter: {
+                name: 'Starter',
+                price: 2900, // $29.00
+                stripePriceId: process.env.STRIPE_STARTER_PRICE_ID,
+                limits: tenantManager.getPlanLimits('starter')
+            },
+            pro: {
+                name: 'Pro',
+                price: 9900, // $99.00
+                stripePriceId: process.env.STRIPE_PRO_PRICE_ID,
+                limits: tenantManager.getPlanLimits('pro')
+            },
+            enterprise: {
+                name: 'Enterprise',
+                price: 29900, // $299.00
+                stripePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID,
+                limits: tenantManager.getPlanLimits('enterprise')
+            }
+        };
+    }
+
+    async createCheckoutSession(tenantId, planId, successUrl, cancelUrl) {
+        if (!this.stripe) throw new Error('Stripe not configured');
+        
+        const tenant = tenantManager.getTenant(tenantId);
+        if (!tenant) throw new Error('Tenant not found');
+        
+        const plan = this.plans[planId];
+        if (!plan || !plan.stripePriceId) throw new Error('Invalid plan');
+
+        let customerId = tenant.stripeCustomerId;
+        
+        // Create Stripe customer if not exists
+        if (!customerId) {
+            const customer = await this.stripe.customers.create({
+                email: tenant.email,
+                metadata: { tenantId: tenant.id }
+            });
+            customerId = customer.id;
+            
+            // Update tenant
+            tenant.stripeCustomerId = customerId;
+            tenantManager.tenants.set(tenantId, tenant);
+            tenantManager.saveTenants();
+        }
+
+        const session = await this.stripe.checkout.sessions.create({
+            customer: customerId,
+            payment_method_types: ['card'],
+            line_items: [{
+                price: plan.stripePriceId,
+                quantity: 1
+            }],
+            mode: 'subscription',
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+            metadata: {
+                tenantId: tenantId,
+                planId: planId
+            }
+        });
+
+        return session;
+    }
+
+    async handleWebhook(body, signature) {
+        if (!this.stripe) throw new Error('Stripe not configured');
+        
+        const event = this.stripe.webhooks.constructEvent(
+            body,
+            signature,
+            process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        switch (event.type) {
+            case 'checkout.session.completed':
+                await this.handleSubscriptionSuccess(event.data.object);
+                break;
+                
+            case 'customer.subscription.updated':
+            case 'customer.subscription.deleted':
+                await this.handleSubscriptionChange(event.data.object);
+                break;
+                
+            case 'invoice.payment_succeeded':
+                await this.handlePaymentSuccess(event.data.object);
+                break;
+                
+            case 'invoice.payment_failed':
+                await this.handlePaymentFailed(event.data.object);
+                break;
+        }
+
+        return { received: true };
+    }
+
+    async handleSubscriptionSuccess(session) {
+        const tenantId = session.metadata?.tenantId;
+        const planId = session.metadata?.planId;
+        
+        if (tenantId && planId) {
+            const tenant = tenantManager.getTenant(tenantId);
+            if (tenant) {
+                tenant.plan = planId;
+                tenant.limits = tenantManager.getPlanLimits(planId);
+                tenant.subscriptionStatus = 'active';
+                tenantManager.tenants.set(tenantId, tenant);
+                tenantManager.saveTenants();
+                
+                logger.info(`Subscription activated: ${tenant.name} -> ${planId}`);
+            }
+        }
+    }
+
+    async handleSubscriptionChange(subscription) {
+        const customer = await this.stripe.customers.retrieve(subscription.customer);
+        const tenantId = customer.metadata?.tenantId;
+        
+        if (tenantId) {
+            const tenant = tenantManager.getTenant(tenantId);
+            if (tenant) {
+                tenant.subscriptionStatus = subscription.status;
+                
+                if (subscription.status === 'canceled') {
+                    tenant.plan = 'free';
+                    tenant.limits = tenantManager.getPlanLimits('free');
+                }
+                
+                tenantManager.tenants.set(tenantId, tenant);
+                tenantManager.saveTenants();
+                
+                logger.info(`Subscription changed: ${tenant.name} -> ${subscription.status}`);
+            }
+        }
+    }
+
+    async handlePaymentSuccess(invoice) {
+        logger.info(`Payment succeeded: ${invoice.id}`);
+    }
+
+    async handlePaymentFailed(invoice) {
+        logger.warn(`Payment failed: ${invoice.id}`);
+    }
+}
+
+const billingManager = new BillingManager();
+
+// ===== API ROUTES =====
+
+// Health check
 app.get('/health', (req, res) => {
     const uptime = process.uptime();
     const avgResponseTime = analytics.responseTimeHistory.length > 0 ?
@@ -572,99 +1204,205 @@ app.get('/health', (req, res) => {
             totalRequests: analytics.totalRequests,
             chatRequests: analytics.chatRequests,
             extractRequests: analytics.extractRequests,
+            widgetRequests: analytics.widgetRequests,
             errors: analytics.errors,
             activeChats: analytics.activeChats.size,
             avgResponseTime,
             successfulExtractions: analytics.successfulExtractions,
             failedExtractions: analytics.failedExtractions,
-            cacheSize: dataCache.size
+            tokenUsage: analytics.tokenUsage,
+            cacheSize: cache.size,
+            tenantCount: tenantManager.tenants.size
         },
         services: {
             groq: !!process.env.GROQ_API_KEY,
             openai: !!process.env.OPENAI_API_KEY,
-            puppeteer: !!puppeteer
+            puppeteer: !!puppeteer,
+            stripe: !!stripe
         }
     });
 });
 
-// ROTA PRINCIPAL - Serve o index.html
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ROTA CHAT.HTML - Que o frontend espera
-app.get('/chat.html', (req, res) => {
-    const robotName = req.query.name || 'Assistente IA';
-    const url = req.query.url || '';
-    const instructions = req.query.instructions || '';
-    
-    // Redireciona para a rota do chatbot
-    res.redirect(`/chatbot?name=${encodeURIComponent(robotName)}&url=${encodeURIComponent(url)}&instructions=${encodeURIComponent(instructions)}`);
-});
-
-// /extract endpoint CORRIGIDO
-app.post('/extract', async (req, res) => {
-    analytics.extractRequests++;
+// Tenant management
+app.post('/api/tenants', async (req, res) => {
     try {
-        const { url, instructions, robotName } = req.body || {};
+        const { name, email, plan = 'free' } = req.body;
         
-        console.log('📥 Recebendo requisição para extrair:', url);
-        
-        if (!url) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'URL é obrigatório' 
+        if (!name || !email) {
+            return res.status(400).json({
+                error: 'Name and email are required'
             });
         }
 
-        // Validação básica de URL
+        const tenant = tenantManager.createTenant({ name, email, plan });
+        
+        // Generate widget token
+        const widgetToken = tenantManager.generateWidgetToken(tenant.id);
+        
+        res.json({
+            success: true,
+            tenant: {
+                id: tenant.id,
+                name: tenant.name,
+                email: tenant.email,
+                plan: tenant.plan,
+                apiKey: tenant.apiKey,
+                widgetToken: widgetToken,
+                limits: tenant.limits,
+                usage: tenant.usage
+            }
+        });
+
+    } catch (error) {
+        logger.error('Create tenant error:', error);
+        res.status(500).json({ error: 'Failed to create tenant' });
+    }
+});
+
+// Get tenant info
+app.get('/api/tenants/:id', authenticateApiKey, (req, res) => {
+    try {
+        if (req.tenant.id !== req.params.id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        res.json({
+            success: true,
+            tenant: {
+                id: req.tenant.id,
+                name: req.tenant.name,
+                email: req.tenant.email,
+                plan: req.tenant.plan,
+                limits: req.tenant.limits,
+                usage: req.tenant.usage,
+                domains: req.tenant.domains,
+                settings: req.tenant.settings,
+                createdAt: req.tenant.createdAt
+            }
+        });
+
+    } catch (error) {
+        logger.error('Get tenant error:', error);
+        res.status(500).json({ error: 'Failed to get tenant info' });
+    }
+});
+
+// Update tenant
+app.put('/api/tenants/:id', authenticateApiKey, (req, res) => {
+    try {
+        if (req.tenant.id !== req.params.id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const { name, domains, settings } = req.body;
+        
+        if (name) req.tenant.name = name;
+        if (domains) req.tenant.domains = domains;
+        if (settings) req.tenant.settings = { ...req.tenant.settings, ...settings };
+
+        tenantManager.tenants.set(req.tenant.id, req.tenant);
+        tenantManager.saveTenants();
+
+        res.json({ success: true, tenant: req.tenant });
+
+    } catch (error) {
+        logger.error('Update tenant error:', error);
+        res.status(500).json({ error: 'Failed to update tenant' });
+    }
+});
+
+// Generate new widget token
+app.post('/api/tenants/:id/widget-token', authenticateApiKey, (req, res) => {
+    try {
+        if (req.tenant.id !== req.params.id) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const { domains, expiresIn } = req.body;
+        const token = tenantManager.generateWidgetToken(
+            req.tenant.id, 
+            domains || req.tenant.domains, 
+            expiresIn
+        );
+
+        res.json({ success: true, widgetToken: token });
+
+    } catch (error) {
+        logger.error('Generate widget token error:', error);
+        res.status(500).json({ error: 'Failed to generate widget token' });
+    }
+});
+
+// Protected extraction endpoint
+app.post('/api/extract', authenticateApiKey, createTenantRateLimit(100), async (req, res) => {
+    try {
+        const { url, instructions, robotName } = req.body;
+        
+        if (!url) {
+            return res.status(400).json({
+                success: false,
+                error: 'URL is required'
+            });
+        }
+
+        // Validate URL
         try { 
             new URL(url); 
         } catch (urlErr) { 
-            return res.status(400).json({ 
-                success: false, 
-                error: 'URL inválido' 
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid URL format'
             }); 
         }
 
-        logger.info(`Starting extraction for URL: ${url}`);
+        // Check chatbot limits
+        const limits = tenantManager.checkLimits(req.tenant);
+        if (!limits.chatbots) {
+            return res.status(429).json({
+                error: 'Chatbot limit exceeded',
+                message: 'Upgrade your plan to create more chatbots',
+                limits: req.tenant.limits,
+                usage: req.tenant.usage
+            });
+        }
+
+        logger.info(`Starting extraction for URL: ${url} (Tenant: ${req.tenant.name})`);
         
-        const extractedData = await extractPageData(url);
+        const extractedData = await extractPageData(url, req.tenant.id);
         
         if (instructions) extractedData.custom_instructions = instructions;
         if (robotName) extractedData.robot_name = robotName;
 
-        console.log('✅ Extração concluída com sucesso');
-        
-        return res.json({ 
-            success: true, 
-            data: extractedData 
+        // Update chatbot count
+        tenantManager.updateTenantUsage(req.tenant.id, { chatbots: 1 });
+
+        res.json({
+            success: true,
+            data: extractedData
         });
 
     } catch (error) {
-        analytics.errors++;
-        console.error('❌ Erro no endpoint /extract:', error);
-        logger.error('Extract endpoint error:', error.message || error);
-        
-        return res.status(500).json({ 
-            success: false, 
-            error: 'Erro interno ao extrair página: ' + (error.message || 'Erro desconhecido')
+        logger.error('Extract endpoint error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error: ' + (error.message || 'Unknown error')
         });
     }
 });
 
-// /chat-universal endpoint CORRIGIDO
-app.post('/chat-universal', async (req, res) => {
-    analytics.chatRequests++;
+// Protected chat endpoint
+app.post('/api/chat', authenticateApiKey, createTenantRateLimit(500), async (req, res) => {
     try {
-        const { message, pageData, url, conversationId, instructions = '', robotName } = req.body || {};
+        const { message, pageData, url, conversationId, instructions = '', robotName } = req.body;
         
         if (!message) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Mensagem é obrigatória' 
+            return res.status(400).json({
+                success: false,
+                error: 'Message is required'
             });
         }
+
+        analytics.chatRequests++;
 
         if (conversationId) {
             analytics.activeChats.add(conversationId);
@@ -673,165 +1411,333 @@ app.post('/chat-universal', async (req, res) => {
 
         let processedPageData = pageData;
         if (!processedPageData && url) {
-            processedPageData = await extractPageData(url);
+            processedPageData = await extractPageData(url, req.tenant.id);
         }
 
-        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions);
+        const aiResponse = await generateAIResponse(
+            message, 
+            processedPageData || {}, 
+            [], 
+            instructions,
+            req.tenant
+        );
 
         let finalResponse = aiResponse;
         if (processedPageData?.url && !String(finalResponse).includes(processedPageData.url)) {
             finalResponse = `${finalResponse}\n\n${processedPageData.url}`;
         }
 
-        return res.json({
+        res.json({
             success: true,
             response: finalResponse,
             bonuses_detected: processedPageData?.bonuses_detected || [],
             metadata: {
                 hasPageData: !!processedPageData,
                 contentLength: processedPageData?.cleanText?.length || 0,
-                method: processedPageData?.method || 'none'
+                method: processedPageData?.method || 'none',
+                tenantId: req.tenant.id
             }
         });
 
     } catch (error) {
         analytics.errors++;
-        logger.error('Chat endpoint error:', error.message || error);
-        return res.status(500).json({ 
-            success: false, 
-            error: 'Erro interno ao gerar resposta: ' + (error.message || 'Erro desconhecido')
+        logger.error('Chat endpoint error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error: ' + (error.message || 'Unknown error')
         });
     }
 });
 
-// Widget JS
-app.get('/widget.js', (req, res) => {
+// Widget chat endpoint (with widget token auth)
+app.post('/api/widget/chat', 
+    authenticateWidget, 
+    createTenantRateLimit(1000), 
+    async (req, res) => {
+        try {
+            const { message, pageData, url, conversationId, instructions = '', robotName } = req.body;
+            
+            if (!message) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Message is required'
+                });
+            }
+
+            analytics.chatRequests++;
+            analytics.widgetRequests++;
+
+            let processedPageData = pageData;
+            if (!processedPageData && url) {
+                processedPageData = await extractPageData(url, req.tenant.id);
+            }
+
+            const aiResponse = await generateAIResponse(
+                message, 
+                processedPageData || {}, 
+                [], 
+                instructions,
+                req.tenant
+            );
+
+            res.json({
+                success: true,
+                response: aiResponse,
+                bonuses_detected: processedPageData?.bonuses_detected || []
+            });
+
+        } catch (error) {
+            analytics.errors++;
+            logger.error('Widget chat error:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Chat processing failed'
+            });
+        }
+    }
+);
+
+// Billing endpoints
+app.post('/api/billing/checkout', authenticateApiKey, async (req, res) => {
+    try {
+        const { planId, successUrl, cancelUrl } = req.body;
+        
+        if (!planId) {
+            return res.status(400).json({ error: 'Plan ID is required' });
+        }
+
+        const session = await billingManager.createCheckoutSession(
+            req.tenant.id,
+            planId,
+            successUrl || `${req.protocol}://${req.get('host')}/dashboard?success=true`,
+            cancelUrl || `${req.protocol}://${req.get('host')}/pricing`
+        );
+
+        res.json({
+            success: true,
+            checkoutUrl: session.url,
+            sessionId: session.id
+        });
+
+    } catch (error) {
+        logger.error('Checkout error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const signature = req.headers['stripe-signature'];
+        await billingManager.handleWebhook(req.body, signature);
+        res.json({ received: true });
+
+    } catch (error) {
+        logger.error('Stripe webhook error:', error);
+        res.status(400).send(`Webhook Error: ${error.message}`);
+    }
+});
+
+// Get usage statistics
+app.get('/api/analytics', authenticateApiKey, (req, res) => {
+    try {
+        const tenantStats = analytics.tenantStats.get(req.tenant.id) || {
+            requests: 0,
+            tokens: 0,
+            errors: 0
+        };
+
+        res.json({
+            success: true,
+            analytics: {
+                usage: req.tenant.usage,
+                limits: req.tenant.limits,
+                stats: tenantStats,
+                plan: req.tenant.plan,
+                utilizationPercent: {
+                    requests: Math.round((req.tenant.usage.requests / req.tenant.limits.requests) * 100),
+                    tokens: Math.round((req.tenant.usage.tokens / req.tenant.limits.tokens) * 100),
+                    chatbots: Math.round((req.tenant.usage.chatbots / req.tenant.limits.chatbots) * 100)
+                }
+            }
+        });
+
+    } catch (error) {
+        logger.error('Analytics error:', error);
+        res.status(500).json({ error: 'Failed to get analytics' });
+    }
+});
+
+// Enhanced widget.js with security
+app.get('/widget.js', authenticateWidget, (req, res) => {
     res.set('Content-Type', 'application/javascript');
-    res.send(`// LinkMágico Widget v6.0
+    
+    const widgetConfig = {
+        apiBase: `${req.protocol}://${req.get('host')}`,
+        token: req.headers['x-widget-token'] || req.query.token,
+        tenantId: req.tenant.id,
+        domains: req.widgetPayload.domains || []
+    };
+
+    res.send(`// LinkMágico Commercial Widget v6.0
 (function() {
     'use strict';
-    if (window.LinkMagicoWidget) return;
     
+    if (window.LinkMagicoWidget) {
+        console.warn('LinkMagico Widget already loaded');
+        return;
+    }
+
+    const CONFIG = ${JSON.stringify(widgetConfig)};
+    
+    // Widget implementation with enhanced security
     var LinkMagicoWidget = {
+        version: '6.0.0-commercial',
         config: {
             position: 'bottom-right',
             primaryColor: '#3b82f6',
             robotName: 'Assistente IA',
             salesUrl: '',
             instructions: '',
-            apiBase: window.location.origin
+            apiBase: CONFIG.apiBase,
+            token: CONFIG.token,
+            showBadge: true,
+            theme: 'light'
         },
         
         init: function(userConfig) {
             this.config = Object.assign(this.config, userConfig || {});
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));
-            } else {
-                this.createWidget();
+            
+            // Verify domain authorization
+            if (CONFIG.domains && CONFIG.domains.length > 0) {
+                const currentDomain = window.location.hostname;
+                const authorized = CONFIG.domains.some(domain => 
+                    currentDomain === domain || currentDomain.endsWith('.' + domain)
+                );
+                
+                if (!authorized) {
+                    console.error('LinkMagico Widget: Domain not authorized');
+                    return;
+                }
             }
-        },
-        
-        createWidget: function() {
-            var container = document.createElement('div');
-            container.id = 'linkmagico-widget';
-            container.innerHTML = this.getHTML();
-            this.addStyles();
-            document.body.appendChild(container);
+            
+            this.createWidget();
             this.bindEvents();
         },
         
-        getHTML: function() {
-            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +
-                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +
-                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +
-                   '<div class="lm-messages" id="lm-messages">' +
-                   '<div class="lm-msg lm-bot">Olá! Como posso ajudar?</div></div>' +
-                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';
+        createWidget: function() {
+            // Widget creation code here...
+            console.log('LinkMagico Commercial Widget loaded for tenant: ${req.tenant.name}');
         },
         
-        addStyles: function() {
-            if (document.getElementById('lm-styles')) return;
-            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +
-                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:24px;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.15);transition:all 0.3s}' +
-                     '.lm-chat{position:absolute;bottom:80px;right:0;width:350px;height:500px;background:white;border-radius:15px;box-shadow:0 10px 40px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}' +
-                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:15px;display:flex;justify-content:space-between;align-items:center}' +
-                     '.lm-close{background:none;border:none;color:white;cursor:pointer;font-size:20px}' +
-                     '.lm-messages{flex:1;padding:15px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +
-                     '.lm-msg{max-width:80%;padding:10px 15px;border-radius:12px;font-size:14px}' +
-                     '.lm-bot{background:#f1f3f4;color:#333;align-self:flex-start}' +
-                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +
-                     '.lm-input{padding:15px;display:flex;gap:10px}' +
-                     '.lm-input input{flex:1;border:1px solid #e0e0e0;border-radius:20px;padding:10px 15px;outline:none}' +
-                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;border-radius:50%;width:40px;height:40px;color:white;cursor:pointer}';
-            var style = document.createElement('style');
-            style.id = 'lm-styles';
-            style.textContent = css;
-            document.head.appendChild(style);
-        },
-        
-        bindEvents: function() {
-            var self = this;
-            document.addEventListener('click', function(ev) {
-                if (ev.target && ev.target.id === 'lm-button') {
-                    var chat = document.getElementById('lm-chat');
-                    if (chat) chat.style.display = chat.style.display === 'flex' ? 'none' : 'flex';
-                }
-                if (ev.target && ev.target.id === 'lm-close') {
-                    document.getElementById('lm-chat').style.display = 'none';
-                }
-                if (ev.target && ev.target.id === 'lm-send') self.send();
-            });
-            document.addEventListener('keypress', function(e){
-                if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'lm-input') self.send();
-            });
-        },
-        
-        send: function() {
-            var input = document.getElementById('lm-input');
-            var msg = input ? input.value.trim() : '';
-            if (!msg) return;
-            this.addMsg(msg, true);
-            if (input) input.value = '';
-            var self = this;
-            
-            fetch(this.config.apiBase + '/chat-universal', {
+        sendMessage: function(message) {
+            fetch(CONFIG.apiBase + '/api/widget/chat', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Widget-Token': CONFIG.token
+                },
                 body: JSON.stringify({
-                    message: msg,
+                    message: message,
                     robotName: this.config.robotName,
                     instructions: this.config.instructions,
                     url: this.config.salesUrl,
                     conversationId: 'widget_' + Date.now()
                 })
-            }).then(function(r){ return r.json(); })
-            .then(function(d){ 
-                if (d.success) self.addMsg(d.response, false); 
-                else self.addMsg('Erro. Tente novamente.', false); 
             })
-            .catch(function(){ self.addMsg('Erro de conexão.', false); });
-        },
-        
-        addMsg: function(text, isUser) {
-            var div = document.createElement('div');
-            div.className = 'lm-msg ' + (isUser ? 'lm-user' : 'lm-bot');
-            div.textContent = text;
-            var container = document.getElementById('lm-messages');
-            if (container) { 
-                container.appendChild(div); 
-                container.scrollTop = container.scrollHeight; 
-            }
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    this.addMessage(data.response, false);
+                } else {
+                    this.addMessage('Erro. Tente novamente.', false);
+                }
+            })
+            .catch(error => {
+                console.error('Widget chat error:', error);
+                this.addMessage('Erro de conexão.', false);
+            });
         }
     };
-    
-        };
     
     window.LinkMagicoWidget = LinkMagicoWidget;
 })();
 `);
 });
 
-// Chatbot HTML endpoint
+// Public routes (no auth required)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Legacy endpoints for backward compatibility
+app.post('/extract', createTenantRateLimit(10), async (req, res) => {
+    try {
+        const { url, instructions } = req.body;
+        
+        if (!url) {
+            return res.status(400).json({
+                success: false,
+                error: 'URL é obrigatório'
+            });
+        }
+
+        // Basic rate limiting for unauthenticated requests
+        const extractedData = await extractPageData(url, null);
+        
+        res.json({
+            success: true,
+            data: extractedData
+        });
+
+    } catch (error) {
+        logger.error('Legacy extract error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao extrair página'
+        });
+    }
+});
+
+app.post('/chat-universal', createTenantRateLimit(50), async (req, res) => {
+    try {
+        const { message, pageData, url, instructions = '' } = req.body;
+        
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mensagem é obrigatória'
+            });
+        }
+
+        let processedPageData = pageData;
+        if (!processedPageData && url) {
+            processedPageData = await extractPageData(url, null);
+        }
+
+        const aiResponse = await generateAIResponse(
+            message,
+            processedPageData || {},
+            [],
+            instructions,
+            null // No tenant for legacy endpoint
+        );
+
+        res.json({
+            success: true,
+            response: aiResponse,
+            bonuses_detected: processedPageData?.bonuses_detected || []
+        });
+
+    } catch (error) {
+        logger.error('Legacy chat error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno ao gerar resposta'
+        });
+    }
+});
+
+// Chatbot HTML generator
 function generateChatbotHTML(pageData = {}, robotName = 'Assistente IA', customInstructions = '') {
     const escapedPageData = JSON.stringify(pageData || {});
     const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
@@ -967,9 +1873,9 @@ app.get('/chatbot', async (req, res) => {
         let pageData = {};
         if (url) {
             try {
-                pageData = await extractPageData(url);
+                pageData = await extractPageData(url, null);
             } catch (extractError) {
-                console.warn('Failed to extract page data:', extractError.message || extractError);
+                logger.warn('Failed to extract page data:', extractError.message || extractError);
             }
         }
         
@@ -982,40 +1888,22 @@ app.get('/chatbot', async (req, res) => {
     }
 });
 
-// ===== ROTAS LGPD CORRIGIDAS - CONTEÚDO DINÂMICO =====
-
-// Política de Privacidade - Conteúdo dinâmico
+// LGPD routes
 app.get('/privacy.html', (req, res) => {
-    const privacyHTML = generatePrivacyPolicyHTML();
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.send(privacyHTML);
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
-// Exclusão de Dados - Conteúdo dinâmico  
 app.get('/excluir-dados', (req, res) => {
-    const deletionHTML = generateDataDeletionHTML();
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.send(deletionHTML);
+    res.sendFile(path.join(__dirname, 'public', 'excluir-dados.html'));
 });
 
-// Rotas alternativas para compatibilidade
-app.get('/privacy-policy', (req, res) => {
-    res.redirect('/privacy.html');
-});
-
-app.get('/delete-data', (req, res) => {
-    res.redirect('/excluir-dados');
-});
-
-app.get('/data-deletion', (req, res) => {
-    res.redirect('/excluir-dados');
-});
-
-// APIs de Compliance
+// LGPD API endpoints
 app.post('/api/log-consent', (req, res) => {
     try {
         const consentData = req.body;
-        const ipHash = hashIP(req.ip || req.connection.remoteAddress || 'unknown');
+        const ipHash = crypto.createHash('sha256')
+            .update((req.ip || 'unknown') + (process.env.IP_SALT || 'default_salt'))
+            .digest('hex').substring(0, 16);
         
         const logEntry = {
             id: crypto.randomUUID(),
@@ -1023,10 +1911,9 @@ app.post('/api/log-consent', (req, res) => {
             consent: consentData,
             ipHash,
             userAgent: req.headers['user-agent'] || 'unknown',
-            referer: req.headers.referer || '',
+            referer: req.headers.referer || ''
         };
 
-        // Log para arquivo
         const logDir = path.join(__dirname, 'logs', 'consent');
         if (!fs.existsSync(logDir)) {
             fs.mkdirSync(logDir, { recursive: true });
@@ -1035,12 +1922,12 @@ app.post('/api/log-consent', (req, res) => {
         const logFile = path.join(logDir, `consent-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}.log`);
         fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
 
-        logger.info(`Consentimento registrado: ${logEntry.id}`);
+        logger.info(`Consent logged: ${logEntry.id}`);
         res.json({ success: true, consentId: logEntry.id });
         
     } catch (error) {
-        logger.error('Erro ao registrar consentimento:', error);
-        res.status(500).json({ error: 'Falha ao registrar consentimento' });
+        logger.error('Consent logging error:', error);
+        res.status(500).json({ error: 'Failed to log consent' });
     }
 });
 
@@ -1048,7 +1935,9 @@ app.post('/api/data-deletion', (req, res) => {
     try {
         const requestData = req.body;
         const requestId = crypto.randomUUID();
-        const ipHash = hashIP(req.ip || req.connection.remoteAddress || 'unknown');
+        const ipHash = crypto.createHash('sha256')
+            .update((req.ip || 'unknown') + (process.env.IP_SALT || 'default_salt'))
+            .digest('hex').substring(0, 16);
         
         const deletionRequest = {
             id: requestId,
@@ -1065,7 +1954,6 @@ app.post('/api/data-deletion', (req, res) => {
             processingDeadline: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
         };
 
-        // Log para arquivo
         const logDir = path.join(__dirname, 'logs', 'deletion');
         if (!fs.existsSync(logDir)) {
             fs.mkdirSync(logDir, { recursive: true });
@@ -1074,7 +1962,7 @@ app.post('/api/data-deletion', (req, res) => {
         const logFile = path.join(logDir, `deletion-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}.log`);
         fs.appendFileSync(logFile, JSON.stringify(deletionRequest) + '\n');
 
-        logger.info(`Solicitação de exclusão registrada: ${requestId}`);
+        logger.info(`Data deletion request: ${requestId}`);
         res.json({ 
             success: true, 
             requestId,
@@ -1082,265 +1970,98 @@ app.post('/api/data-deletion', (req, res) => {
         });
         
     } catch (error) {
-        logger.error('Erro ao processar solicitação de exclusão:', error);
-        res.status(500).json({ error: 'Falha ao processar solicitação' });
+        logger.error('Data deletion error:', error);
+        res.status(500).json({ error: 'Failed to process deletion request' });
     }
 });
 
-// Funções auxiliares
-function hashIP(ip) {
-    if (!ip) return 'unknown';
-    return crypto.createHash('sha256').update(ip + (process.env.IP_SALT || 'default_salt')).digest('hex').substring(0, 16);
-}
+// Admin dashboard (protected)
+app.get('/admin', authenticateApiKey, (req, res) => {
+    // Only allow admin access for enterprise plans or specific tenant
+    if (req.tenant.plan !== 'enterprise') {
+        return res.status(403).json({ error: 'Admin access denied' });
+    }
+    
+    res.json({
+        success: true,
+        analytics: {
+            totalTenants: tenantManager.tenants.size,
+            totalRequests: analytics.totalRequests,
+            totalTokens: analytics.tokenUsage,
+            activeChats: analytics.activeChats.size,
+            cacheSize: cache.size,
+            uptime: process.uptime()
+        },
+        tenants: Array.from(tenantManager.tenants.values()).map(tenant => ({
+            id: tenant.id,
+            name: tenant.name,
+            plan: tenant.plan,
+            usage: tenant.usage,
+            isActive: tenant.isActive,
+            createdAt: tenant.createdAt
+        }))
+    });
+});
 
-// Gerador de HTML da Política de Privacidade
-function generatePrivacyPolicyHTML() {
-    return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Política de Privacidade - LinkMágico v6.0</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #3b82f6;
-            --dark: #0f172a;
-            --dark-surface: #1e293b;
-            --dark-text: #f8fafc;
-            --dark-text-secondary: #cbd5e1;
-            --glass-bg: rgba(30, 41, 59, 0.8);
-            --glass-border: rgba(148, 163, 184, 0.2);
-            --gradient-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-        }
-        body { font-family: 'Inter', sans-serif; background: var(--gradient-bg); color: var(--dark-text); line-height: 1.6; margin: 0; padding: 0; min-height: 100vh; }
-        .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
-        .header { text-align: center; margin-bottom: 3rem; padding: 2rem; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; backdrop-filter: blur(20px); }
-        .header h1 { color: var(--dark-text); margin-bottom: 0.5rem; font-size: 2rem; }
-        .content { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 3rem; backdrop-filter: blur(20px); }
-        .section { margin-bottom: 2rem; }
-        .section h2 { color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 0.5rem; margin-bottom: 1rem; }
-        .back-btn { display: inline-block; background: var(--primary); color: white; padding: 1rem 2rem; border-radius: 10px; text-decoration: none; margin-top: 2rem; transition: all 0.2s; }
-        .back-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3); }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🛡️ Política de Privacidade</h1>
-            <p>LinkMágico v6.0 - Tratamento de Dados Pessoais conforme LGPD</p>
-        </div>
-        <div class="content">
-            <div class="section">
-                <h2>1. Informações Gerais</h2>
-                <p>Esta Política de Privacidade descreve como o LinkMágico v6.0 coleta, usa, armazena e protege suas informações pessoais, em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD - Lei nº 13.709/2018).</p>
-            </div>
-            <div class="section">
-                <h2>2. Dados Coletados</h2>
-                <ul>
-                    <li><strong>Dados de configuração:</strong> Nome do assistente virtual, URL da página, instruções personalizadas</li>
-                    <li><strong>Dados de navegação:</strong> Endereço IP (hash), tipo de navegador, sistema operacional</li>
-                    <li><strong>Dados de consentimento:</strong> Registro de autorização para extração de dados</li>
-                    <li><strong>Dados extraídos:</strong> Conteúdo público de páginas (processamento temporário)</li>
-                </ul>
-            </div>
-            <div class="section">
-                <h2>3. Base Legal e Finalidades</h2>
-                <p><strong>Bases legais (Art. 7º LGPD):</strong></p>
-                <ul>
-                    <li><strong>Consentimento:</strong> Para extração e processamento de dados de URLs</li>
-                    <li><strong>Legítimo interesse:</strong> Para melhoria dos serviços e analytics</li>
-                    <li><strong>Execução de contrato:</strong> Para fornecimento do serviço de chatbot</li>
-                </ul>
-            </div>
-            <div class="section">
-                <h2>4. Seus Direitos (Art. 18 LGPD)</h2>
-                <ul>
-                    <li><strong>Confirmação e acesso:</strong> Saber se tratamos seus dados e acessá-los</li>
-                    <li><strong>Correção:</strong> Corrigir dados incompletos, inexatos ou desatualizados</li>
-                    <li><strong>Eliminação:</strong> Solicitar exclusão de dados desnecessários</li>
-                    <li><strong>Portabilidade:</strong> Receber seus dados em formato estruturado</li>
-                    <li><strong>Revogação do consentimento:</strong> Retirar consentimento a qualquer momento</li>
-                </ul>
-            </div>
-            <div class="section">
-                <h2>5. Segurança dos Dados</h2>
-                <ul>
-                    <li>Criptografia de dados em trânsito (TLS/SSL)</li>
-                    <li>Hash de endereços IP (nunca armazenamos IPs brutos)</li>
-                    <li>Controles de acesso baseados em funções</li>
-                    <li>Monitoramento e logs de segurança</li>
-                    <li>Processamento temporário (dados não armazenados permanentemente)</li>
-                </ul>
-            </div>
-            <div class="section">
-                <h2>6. Contato</h2>
-                <p><strong>Encarregado de Dados (DPO):</strong><br>
-                E-mail: dpo@linkmagico.com<br>
-                Para exercer seus direitos ou esclarecer dúvidas sobre privacidade.</p>
-            </div>
-            <a href="/" class="back-btn">← Voltar para o LinkMágico</a>
-        </div>
-    </div>
-</body>
-</html>`;
-}
-
-// Gerador de HTML do Formulário de Exclusão
-function generateDataDeletionHTML() {
-    return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exclusão de Dados - LinkMágico v6.0</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --error: #ef4444; --dark: #0f172a; --dark-surface: #1e293b; --dark-text: #f8fafc; --dark-text-secondary: #cbd5e1; --glass-bg: rgba(30, 41, 59, 0.8); --glass-border: rgba(148, 163, 184, 0.2); --gradient-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-        }
-        body { font-family: 'Inter', sans-serif; background: var(--gradient-bg); color: var(--dark-text); line-height: 1.6; margin: 0; padding: 0; min-height: 100vh; }
-        .container { max-width: 600px; margin: 0 auto; padding: 2rem; }
-        .header { text-align: center; margin-bottom: 2rem; padding: 2rem; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; backdrop-filter: blur(20px); }
-        .form-container { background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 20px; padding: 2rem; backdrop-filter: blur(20px); }
-        .form-group { margin-bottom: 1.5rem; }
-        .form-label { display: block; color: var(--dark-text); font-weight: 600; margin-bottom: 0.5rem; }
-        .form-input, .form-select, .form-textarea { width: 100%; padding: 0.875rem 1rem; border: 2px solid var(--dark-surface); border-radius: 10px; background: var(--dark-surface); color: var(--dark-text); font-size: 0.9rem; transition: all 0.3s ease; box-sizing: border-box; }
-        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
-        .checkbox-group { display: flex; align-items: flex-start; gap: 0.75rem; margin: 1.5rem 0; padding: 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 10px; }
-        .btn { flex: 1; padding: 1rem; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-size: 0.9rem; }
-        .btn-cancel { background: transparent; border: 2px solid var(--dark-surface); color: var(--dark-text); }
-        .btn-danger { background: linear-gradient(135deg, var(--error), #dc2626); color: white; }
-        .buttons { display: flex; gap: 1rem; margin-top: 2rem; }
-        .success-message { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--success); padding: 1.5rem; border-radius: 12px; margin: 1.5rem 0; display: none; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🗑️ Exclusão de Dados Pessoais</h1>
-            <p>Solicite a remoção completa dos seus dados conforme seus direitos na LGPD</p>
-        </div>
-        <div class="form-container">
-            <form id="deletionForm">
-                <div class="form-group">
-                    <label for="email" class="form-label">E-mail *</label>
-                    <input type="email" id="email" name="email" class="form-input" placeholder="seu@email.com" required>
-                </div>
-                <div class="form-group">
-                    <label for="robotName" class="form-label">Nome do Assistente Virtual</label>
-                    <input type="text" id="robotName" name="robotName" class="form-input" placeholder="@nome.do.bot (opcional)">
-                </div>
-                <div class="form-group">
-                    <label for="url" class="form-label">URL da Página</label>
-                    <input type="url" id="url" name="url" class="form-input" placeholder="https://exemplo.com (opcional)">
-                </div>
-                <div class="form-group">
-                    <label for="requestType" class="form-label">O que você deseja? *</label>
-                    <select id="requestType" name="requestType" class="form-select" required>
-                        <option value="">Selecione uma opção</option>
-                        <option value="delete_all">Exclusão completa de todos os dados</option>
-                        <option value="delete_specific">Exclusão de dados específicos</option>
-                        <option value="access_data">Acesso aos meus dados (portabilidade)</option>
-                        <option value="revoke_consent">Revogação de consentimento</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="reason" class="form-label">Motivo da solicitação (opcional)</label>
-                    <textarea id="reason" name="reason" class="form-textarea" placeholder="Descreva o motivo da sua solicitação..."></textarea>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="confirmDeletion" name="confirmDeletion" required>
-                    <label for="confirmDeletion"><strong>Confirmo que entendo</strong> que esta ação resultará na exclusão permanente dos dados solicitados e que não poderá ser desfeita.</label>
-                </div>
-                <div class="buttons">
-                    <a href="/" class="btn btn-cancel">Cancelar</a>
-                    <button type="submit" class="btn btn-danger" id="submitBtn" disabled>Solicitar Exclusão</button>
-                </div>
-            </form>
-            <div class="success-message" id="successMessage">
-                <h4>✅ Solicitação Enviada</h4>
-                <p>Sua solicitação foi recebida e será processada em até 72 horas. Você receberá uma confirmação por e-mail quando concluída.</p>
-            </div>
-        </div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const confirmCheckbox = document.getElementById('confirmDeletion');
-            const submitBtn = document.getElementById('submitBtn');
-            confirmCheckbox.addEventListener('change', function() {
-                submitBtn.disabled = !this.checked;
-            });
-            document.getElementById('deletionForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const email = document.getElementById('email').value.trim();
-                const requestType = document.getElementById('requestType').value;
-                if (!email || !requestType) {
-                    alert('Por favor, preencha todos os campos obrigatórios.');
-                    return;
-                }
-                const confirmMessage = requestType === 'delete_all' ? 'Tem certeza que deseja excluir TODOS os seus dados? Esta ação não pode ser desfeita.' : 'Tem certeza que deseja prosseguir com esta solicitação?';
-                if (!confirm(confirmMessage)) return;
-                try {
-                    const formData = {
-                        email: email,
-                        robotName: document.getElementById('robotName').value.trim(),
-                        url: document.getElementById('url').value.trim(),
-                        requestType: requestType,
-                        reason: document.getElementById('reason').value.trim(),
-                        timestamp: new Date().toISOString()
-                    };
-                    const response = await fetch('/api/data-deletion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-                    if (!response.ok) throw new Error('Erro ao processar solicitação');
-                    document.getElementById('deletionForm').style.display = 'none';
-                    document.getElementById('successMessage').style.display = 'block';
-                } catch (error) {
-                    alert('Erro ao processar solicitação. Tente novamente ou entre em contato conosco.');
-                }
-            });
-        });
-    </script>
-</body>
-</html>`;
-}
-
-// ===== FIM DAS ROTAS LGPD =====
-
-// Rota de fallback para qualquer outra requisição
+// Fallback for SPA routes
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ===== Server startup =====
+// Error handling middleware
+app.use((error, req, res, next) => {
+    logger.error('Unhandled error:', error);
+    res.status(500).json({
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+    });
+});
+
+// ===== SERVER STARTUP =====
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`🚀 LinkMágico Server v6.0 rodando na porta ${PORT}`);
-    logger.info(`📊 Health check disponível em: http://localhost:${PORT}/health`);
-    logger.info(`🤖 Chatbot disponível em: http://localhost:${PORT}/chatbot`);
-    logger.info(`🔧 Widget JS disponível em: http://localhost:${PORT}/widget.js`);
-    logger.info(`📄 Política de Privacidade disponível em: http://localhost:${PORT}/privacy.html`);
-    logger.info(`🗑️ Exclusão de Dados disponível em: http://localhost:${PORT}/excluir-dados`);
+    logger.info(`🚀 LinkMágico Commercial Server v6.0 running on port ${PORT}`);
+    logger.info(`📊 Health check: http://localhost:${PORT}/health`);
+    logger.info(`🤖 Legacy chatbot: http://localhost:${PORT}/chatbot`);
+    logger.info(`🔧 Widget JS: http://localhost:${PORT}/widget.js`);
+    logger.info(`📄 Privacy Policy: http://localhost:${PORT}/privacy.html`);
+    logger.info(`🗑️ Data Deletion: http://localhost:${PORT}/excluir-dados`);
+    logger.info(`💳 Stripe configured: ${!!stripe}`);
+    logger.info(`🔐 Total tenants loaded: ${tenantManager.tenants.size}`);
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully');
+const gracefulShutdown = (signal) => {
+    logger.info(`${signal} received, shutting down gracefully`);
     server.close(() => {
+        logger.info('HTTP server closed');
+        
+        // Clean up resources
+        cache.clear();
+        analytics.activeChats.clear();
+        
         logger.info('Process terminated');
         process.exit(0);
     });
+    
+    // Force close after 10 seconds
+    setTimeout(() => {
+        logger.error('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Uncaught exception handler
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception:', error);
+    gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
-process.on('SIGINT', () => {
-    logger.info('SIGINT received, shutting down gracefully');
-    server.close(() => {
-        logger.info('Process terminated');
-        process.exit(0);
-    });
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 module.exports = app;
