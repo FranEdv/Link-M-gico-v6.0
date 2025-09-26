@@ -85,6 +85,8 @@ const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379')
 // Rate limiting (multi-tenant)
 const tenantRateLimit = rateLimit({
   store: new RedisStore({
+    // rate-limit-redis expects either a client or sendCommand implementation.
+    // Using ioredis with sendCommand wrapper so it works reliably.
     sendCommand: (...args) => redisClient.call(...args)
   }),
   windowMs: 60 * 1000, // 1 minute
@@ -860,7 +862,7 @@ function generateDataDeletionHTML() {
 
 // ===== Start server =====
 const server = app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`🚀 LinkMágico Server v6.0 rodando na porta ${PORT}`);
+  logger.info(`🚀 LinkMagico Server v6.0 rodando na porta ${PORT}`);
   logger.info(`Health: http://localhost:${PORT}/health`);
   logger.info(`Chatbot: http://localhost:${PORT}/chatbot`);
   logger.info(`Widget (protected): http://localhost:${PORT}/widget.js?token=...`);
