@@ -55,7 +55,7 @@ app.use(cors({
     origin: ['https://link-m-gico-v6-0-hmpl.onrender.com', 'http://localhost:3000', 'http://localhost:8080'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -63,126 +63,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(bodyParser.json({ limit: '10mb' }));
 
 app.use(morgan('combined'));
-
-// ===== PRE-AUTH: validação leve de API Key (não bloqueante) =====
-const ENABLE_PREAUTH_API_KEY = (process.env.ENABLE_PREAUTH_API_KEY || 'true').toLowerCase() !== 'false';
-
-let validateApiKey = null;
-let getClientByApiKey = null;
-let authApiKeys = null;
-try {
-  const authModule = require('./auth');
-  validateApiKey = authModule.validateApiKey || null;
-  getClientByApiKey = authModule.getClientByApiKey || null;
-  authApiKeys = authModule.apiKeys || authModule.api_keys || null;
-} catch (e) {
-  logger && logger.warn && logger.warn('preAuth: ./auth module not available or failed to load:', e.message || e);
-}
-
-// Middleware que tenta popular req.cliente sem bloquear nada
-function preAuthApiKeyMiddleware(req, res, next) {
-  if (!ENABLE_PREAUTH_API_KEY) return next();
-  try {
-    const headerKey = (req.get && (req.get('x-api-key') || req.get('X-API-Key'))) || null;
-    const apiKey = headerKey || req.query?.api_key || req.query?.key || null;
-    if (!apiKey) return next();
-
-    // 1) usar validateApiKey (se exportado)
-    if (typeof validateApiKey === 'function') {
-      try {
-        const result = validateApiKey(apiKey);
-        // validateApiKey pode ser sync ou async (retornar Promise)
-        if (result && typeof result.then === 'function') {
-          // async case
-          return result.then(resObj => {
-            if (resObj && (resObj.success || resObj.valid || resObj.client)) {
-              req.cliente = resObj.client || resObj.keyData || { nome: (resObj.client?.nome || resObj.client?.name || 'API Client'), plano: resObj.client?.plan || 'basic', apiKey };
-              req._preAuthApiKey = true;
-            }
-            return next();
-          }).catch(err => {
-            logger && logger.warn && logger.warn('preAuth validateApiKey async error:', err && err.message ? err.message : err);
-            return next();
-          });
-        } else {
-          if (result && (result.success || result.valid || result.client)) {
-            req.cliente = result.client || result.keyData || { nome: (result.client?.nome || result.client?.name || 'API Client'), plano: result.client?.plan || 'basic', apiKey };
-            req._preAuthApiKey = true;
-          }
-          return next();
-        }
-      } catch (e) {
-        logger && logger.warn && logger.warn('preAuth validateApiKey error:', e.message || e);
-        return next();
-      }
-    }
-
-    // 2) usar getClientByApiKey (se exportado)
-    if (typeof getClientByApiKey === 'function') {
-      try {
-        const client = getClientByApiKey(apiKey);
-        if (client && (client.active !== false)) {
-          req.cliente = { nome: client.nome || client.name || 'API Client', plano: client.plano || client.plan || 'basic', apiKey };
-          req._preAuthApiKey = true;
-        }
-        return next();
-      } catch (e) {
-        logger && logger.warn && logger.warn('preAuth getClientByApiKey error:', e.message || e);
-        return next();
-      }
-    }
-
-    // 3) tentar mapa apiKeys exportado do ./auth
-    try {
-      if (authApiKeys) {
-        // Se for Map
-        const entry = (typeof authApiKeys.get === 'function') ? authApiKeys.get(apiKey) : (authApiKeys[apiKey] || null);
-        if (entry && (entry.active !== false)) {
-          req.cliente = { nome: entry.client || entry.nome || entry.name || 'API Client', plano: entry.plan || entry.plano || 'basic', apiKey };
-          req._preAuthApiKey = true;
-        }
-        return next();
-      }
-    } catch (e) {
-      logger && logger.warn && logger.warn('preAuth authApiKeys lookup error:', e.message || e);
-      return next();
-    }
-
-    // 4) fallback seguro: ler data/api_keys.json (não escrever)
-    try {
-      const dataFile = path.join(__dirname, 'data', 'api_keys.json');
-      if (fs.existsSync(dataFile)) {
-        const raw = fs.readFileSync(dataFile, 'utf8');
-        const parsed = JSON.parse(raw);
-        const list = parsed?.apiKeys || parsed || [];
-        // list may be array of [key, data] or object map
-        let found = null;
-        if (Array.isArray(list)) {
-          for (const item of list) {
-            if (!item) continue;
-            if (Array.isArray(item) && item[0] === apiKey) { found = item[1]; break; }
-            if (item.key === apiKey || item.apiKey === apiKey) { found = item; break; }
-          }
-        } else if (typeof list === 'object') {
-          found = list[apiKey] || null;
-        }
-        if (found && found.active !== false) {
-          req.cliente = { nome: found.client || found.nome || found.name || 'API Client', plano: found.plan || found.plano || 'basic', apiKey };
-          req._preAuthApiKey = true;
-        }
-      }
-    } catch (e) {
-      logger && logger.warn && logger.warn('preAuth fallback file read error:', e.message || e);
-    }
-    return next();
-  } catch (err) {
-    logger && logger.warn && logger.warn('preAuthApiKeyMiddleware error:', err && err.message ? err.message : err);
-    return next();
-  }
-}
-
-// Registrar middleware (inserir logo após morgan e antes do static)
-app.use(preAuthApiKeyMiddleware);
 
 // Serve static files from public directory
 app.use(express.static('public', {
