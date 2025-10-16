@@ -991,11 +991,6 @@ class SuperInteligenciaEmocional {
                 respostaBase += "Deixe-me explicar detalhadamente. ";
                 break;
             default:
-                respostaBase += "Aqui estão as informações que você precis
-
-
-                break;
-            default:
                 respostaBase += "Aqui estão as informações que você precisa: ";
         }
 
