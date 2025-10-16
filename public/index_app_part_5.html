@@ -1,0 +1,500 @@
+        function openNewSystems() {
+            document.getElementById('newSystemsPanel').style.display = 'block';
+            loadSystemStatus();
+        }
+        
+        function closeNewSystems() {
+            document.getElementById('newSystemsPanel').style.display = 'none';
+        }
+        
+        function showNewTab(tabName) {
+            // Esconder todos os conteúdos
+            document.querySelectorAll('.new-tab-content').forEach(el => el.style.display = 'none');
+            
+            // Remover active de todas as tabs
+            document.querySelectorAll('.new-tab').forEach(el => el.classList.remove('active'));
+            
+            // Mostrar conteúdo selecionado
+            document.getElementById('tab-' + tabName).style.display = 'block';
+            
+            // Ativar tab
+            event.target.classList.add('active');
+            
+            // Carregar dados da tab
+            if (tabName === 'analytics') loadAnalytics();
+            if (tabName === 'webhooks') loadWebhooks();
+            if (tabName === 'billing') loadPlans();
+            if (tabName === 'llm') loadLLMStats();
+            if (tabName === 'system') loadSystemStatus();
+            if (tabName === 'gmail') loadGmailStatus();
+            if (tabName === 'whatsapp') loadWhatsAppStatus();
+            if (tabName === 'chatgpt') loadChatGPTStatus();
+            if (tabName === 'leads') {
+                loadLeadsStats();
+                loadBackups(); // Carregar backups também
+            }
+        }
+        
+        async function loadAnalytics() {
+            try {
+                // Buscar dados de leads
+                const leadsResponse = await fetch('/admin/leads', {
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024'
+                    }
+                });
+                const leadsData = await leadsResponse.json();
+                
+                if (leadsData.success && leadsData.leads) {
+                    const leads = leadsData.leads;
+                    const totalLeads = leads.length;
+                    
+                    // Calcular total de mensagens (soma de todas as conversas)
+                    let totalMessages = 0;
+                    let totalConversations = 0;
+                    
+                    leads.forEach(lead => {
+                        if (lead.conversations && Array.isArray(lead.conversations)) {
+                            totalConversations += lead.conversations.length;
+                            lead.conversations.forEach(conv => {
+                                if (conv.messages && Array.isArray(conv.messages)) {
+                                    totalMessages += conv.messages.length;
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Calcular taxa de sucesso (leads com email ou telefone / total)
+                    const leadsWithContact = leads.filter(lead => {
+                        const telefone = lead.telefone || lead.phone;
+                        return lead.email || telefone;
+                    }).length;
+                    
+                    const successRate = totalLeads > 0 ? Math.round((leadsWithContact / totalLeads) * 100) : 100;
+                    
+                    // Atualizar interface
+                    document.getElementById('analytics-messages').textContent = totalMessages;
+                    document.getElementById('analytics-conversations').textContent = totalConversations;
+                    document.getElementById('analytics-leads').textContent = totalLeads;
+                    document.getElementById('analytics-success').textContent = successRate + '%';
+                    
+                    console.log(`📊 Analytics carregado: ${totalMessages} mensagens, ${totalConversations} conversas, ${totalLeads} leads, ${successRate}% sucesso`);
+                } else {
+                    // Se não houver dados, mostrar zeros
+                    document.getElementById('analytics-messages').textContent = '0';
+                    document.getElementById('analytics-conversations').textContent = '0';
+                    document.getElementById('analytics-leads').textContent = '0';
+                    document.getElementById('analytics-success').textContent = '100%';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar analytics:', error);
+                // Mostrar zeros em caso de erro
+                document.getElementById('analytics-messages').textContent = '0';
+                document.getElementById('analytics-conversations').textContent = '0';
+                document.getElementById('analytics-leads').textContent = '0';
+                document.getElementById('analytics-success').textContent = '0%';
+            }
+        }
+        
+        async function loadWebhooks() {
+            try {
+                const response = await fetch('/api/webhooks/default');
+                const data = await response.json();
+                
+                const container = document.getElementById('webhooks-list');
+                if (data.success && data.webhooks.length > 0) {
+                    container.innerHTML = data.webhooks.map(w => `
+                        <div style="background:#334155; padding:1rem; border-radius:12px; margin-bottom:1rem;">
+                            <div style="color:#cbd5e1; font-weight:600;">${w.eventType}</div>
+                            <div style="color:#94a3b8; font-size:0.9rem;">${w.url}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p style="color:#94a3b8;">Nenhum webhook configurado.</p>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar webhooks:', error);
+            }
+        }
+        
+        async function addFAQ() {
+            const question = document.getElementById('faq-question').value;
+            const answer = document.getElementById('faq-answer').value;
+            
+            if (!question || !answer) {
+                alert('Preencha pergunta e resposta!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/knowledge/default/faq', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question, answer})
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('FAQ adicionada com sucesso!');
+                    document.getElementById('faq-question').value = '';
+                    document.getElementById('faq-answer').value = '';
+                    loadFAQs();
+                }
+            } catch (error) {
+                console.error('Erro ao adicionar FAQ:', error);
+                alert('Erro ao adicionar FAQ');
+            }
+        }
+        
+        async function loadFAQs() {
+            try {
+                const response = await fetch('/api/knowledge/default');
+                const data = await response.json();
+                
+                const container = document.getElementById('faqs-container');
+                if (data.success && data.knowledge.faqs && data.knowledge.faqs.length > 0) {
+                    container.innerHTML = data.knowledge.faqs.map(faq => `
+                        <div style="background:#334155; padding:1rem; border-radius:12px; margin-bottom:1rem;">
+                            <div style="color:#cbd5e1; font-weight:600; margin-bottom:0.5rem;">❓ ${faq.question}</div>
+                            <div style="color:#94a3b8; font-size:0.9rem;">💬 ${faq.answer}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p style="color:#94a3b8;">Nenhuma FAQ cadastrada ainda.</p>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar FAQs:', error);
+            }
+        }
+        
+        async function loadPlans() {
+            try {
+                const response = await fetch('/api/plans');
+                const data = await response.json();
+                
+                const container = document.getElementById('plans-container');
+                if (data.success) {
+                    container.innerHTML = data.plans.map(plan => `
+                        <div style="background:#334155; padding:1.5rem; border-radius:12px; border:2px solid ${plan.id === 'professional' ? '#3b82f6' : '#475569'};">
+                            <h3 style="color:#cbd5e1; margin-bottom:0.5rem;">${plan.name}</h3>
+                            <div style="color:#60a5fa; font-size:2rem; font-weight:700; margin-bottom:1rem;">
+                                ${plan.price === 0 ? 'Grátis' : 'R$ ' + plan.price.toFixed(2)}
+                            </div>
+                            <ul style="color:#94a3b8; font-size:0.9rem; list-style:none; padding:0;">
+                                <li style="margin-bottom:0.5rem;">✓ ${plan.features.maxChatbots} chatbots</li>
+                                <li style="margin-bottom:0.5rem;">✓ ${plan.features.requestsPerMinute} req/min</li>
+                                <li style="margin-bottom:0.5rem;">✓ ${plan.features.requestsPerHour} req/hora</li>
+                            </ul>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar planos:', error);
+            }
+        }
+        
+        async function loadLLMStats() {
+            try {
+                const response = await fetch('/api/llm/stats/default?days=30');
+                const data = await response.json();
+                
+                if (data.success && data.savings) {
+                    document.getElementById('llm-cache-hits').textContent = data.savings.cacheHits || 0;
+                    document.getElementById('llm-savings').textContent = 'R$ ' + (data.savings.savings || 0);
+                    document.getElementById('llm-cache-rate').textContent = (data.savings.cacheHitRate || 0) + '%';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar stats LLM:', error);
+            }
+        }
+        
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/system/status');
+                const data = await response.json();
+                
+                const container = document.getElementById('system-status');
+                if (data.success) {
+                    container.innerHTML = `
+                        <div style="display:grid; gap:1rem;">
+                            <div style="background:#334155; padding:1rem; border-radius:12px;">
+                                <div style="color:#94a3b8;">Servidor:</div>
+                                <div style="color:#10b981; font-weight:600;">${data.status.server}</div>
+                            </div>
+                            <div style="background:#334155; padding:1rem; border-radius:12px;">
+                                <div style="color:#94a3b8;">Banco de Dados:</div>
+                                <div style="color:#10b981; font-weight:600;">${data.status.database.type} - ${data.status.database.connected ? 'Conectado' : 'Desconectado'}</div>
+                            </div>
+                            <div style="background:#334155; padding:1rem; border-radius:12px;">
+                                <div style="color:#94a3b8;">Cache:</div>
+                                <div style="color:#10b981; font-weight:600;">${data.status.cache.type} - ${data.status.cache.connected ? 'Conectado' : 'Desconectado'}</div>
+                            </div>
+                            <div style="background:#334155; padding:1rem; border-radius:12px;">
+                                <div style="color:#94a3b8;">Uptime:</div>
+                                <div style="color:#60a5fa; font-weight:600;">${Math.floor(data.status.uptime / 60)} minutos</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar status:', error);
+                document.getElementById('system-status').innerHTML = '<p style="color:#ef4444;">Erro ao carregar status do sistema</p>';
+            }
+        }
+        
+        function showAddWebhook() {
+            alert('Funcionalidade de adicionar webhook em desenvolvimento. Use a API diretamente por enquanto.');
+        }
+        
+        // Carregar FAQs ao abrir a tab
+        setTimeout(() => {
+            if (document.getElementById('tab-knowledge').style.display === 'block') {
+                loadFAQs();
+            }
+        }, 1000);
+    
+        
+        // ===== FUNÇÕES DAS NOVAS INTEGRAÇÕES V3 =====
+        
+        async function loadGmailStatus() {
+            try {
+                const response = await fetch('/api/gmail/status');
+                const data = await response.json();
+                const statusEl = document.getElementById('gmail-status');
+                
+                if (data.configured) {
+                    statusEl.innerHTML = '<div style="color:#10b981;">✅ Gmail configurado e pronto para uso</div>';
+                } else {
+                    statusEl.innerHTML = '<div style="color:#f59e0b;">⚠️ Gmail não configurado. Configure as variáveis GMAIL_USER e GMAIL_PASSWORD no .env</div>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar status Gmail:', error);
+            }
+        }
+        
+        async function testGmail() {
+            const email = document.getElementById('test-email').value;
+            if (!email) {
+                alert('Digite um email!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/gmail/send', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        to: email,
+                        subject: 'Teste Link Mágico V3',
+                        html: '<h1>Email de teste!</h1><p>Se você recebeu este email, a integração Gmail está funcionando! 🎉</p>'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Email enviado com sucesso! Verifique a caixa de entrada.');
+                } else {
+                    alert('Erro ao enviar email: ' + (data.error || 'Desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao enviar email');
+            }
+        }
+        
+        async function loadWhatsAppStatus() {
+            try {
+                const response = await fetch('/api/whatsapp/status');
+                const data = await response.json();
+                const statusEl = document.getElementById('whatsapp-status');
+                
+                if (data.configured) {
+                    statusEl.innerHTML = `<div style="color:#10b981;">✅ WhatsApp configurado (${data.provider})</div>`;
+                } else {
+                    statusEl.innerHTML = '<div style="color:#f59e0b;">⚠️ WhatsApp não configurado. Configure WHATSAPP_PROVIDER no .env</div>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar status WhatsApp:', error);
+            }
+        }
+        
+        async function testWhatsApp() {
+            const phone = document.getElementById('test-phone').value;
+            if (!phone) {
+                alert('Digite um número de telefone!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/whatsapp/send', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        to: phone,
+                        message: '🎉 Teste Link Mágico V3! Se você recebeu esta mensagem, a integração WhatsApp está funcionando!'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Mensagem enviada com sucesso!');
+                } else {
+                    alert('Erro ao enviar mensagem: ' + (data.error || 'Desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao enviar mensagem');
+            }
+        }
+        
+        async function loadChatGPTStatus() {
+            try {
+                const response = await fetch('/api/chatgpt/status');
+                const data = await response.json();
+                const statusEl = document.getElementById('chatgpt-status');
+                
+                if (data.configured) {
+                    statusEl.innerHTML = '<div style="color:#10b981;">✅ ChatGPT configurado e pronto</div>';
+                } else {
+                    statusEl.innerHTML = '<div style="color:#f59e0b;">⚠️ ChatGPT não configurado. Configure CHATGPT_API_KEY no .env</div>';
+                }
+                
+                // Carregar modelos
+                const modelsResponse = await fetch('/api/chatgpt/models');
+                const modelsData = await modelsResponse.json();
+                const modelsEl = document.getElementById('chatgpt-models');
+                
+                if (modelsData.length > 0) {
+                    modelsEl.innerHTML = modelsData.map(m => `
+                        <div style="background:#1e293b; padding:1rem; border-radius:8px; margin-bottom:0.5rem;">
+                            <div style="color:#cbd5e1; font-weight:600;">${m.name}</div>
+                            <div style="color:#94a3b8; font-size:0.9rem;">${m.description}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar status ChatGPT:', error);
+            }
+        }
+        
+        async function testChatGPT() {
+            const prompt = document.getElementById('test-prompt').value;
+            if (!prompt) {
+                alert('Digite uma pergunta!');
+                return;
+            }
+            
+            const responseEl = document.getElementById('chatgpt-response');
+            responseEl.style.display = 'block';
+            responseEl.innerHTML = '<div style="color:#94a3b8;">Gerando resposta...</div>';
+            
+            try {
+                const response = await fetch('/api/chatgpt/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        model: 'gpt-4-turbo'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    responseEl.innerHTML = `<div style="color:#cbd5e1;">${data.result.response}</div>`;
+                } else {
+                    responseEl.innerHTML = `<div style="color:#ef4444;">Erro: ${data.error}</div>`;
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                responseEl.innerHTML = '<div style="color:#ef4444;">Erro ao gerar resposta</div>';
+            }
+        }
+        
+        async function saveWhitelabel() {
+            const config = {
+                companyName: document.getElementById('wl-company').value,
+                logoUrl: document.getElementById('wl-logo').value,
+                primaryColor: document.getElementById('wl-primary').value,
+                secondaryColor: document.getElementById('wl-secondary').value
+            };
+            
+            try {
+                const response = await fetch('/api/whitelabel/default', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Configuração salva com sucesso!');
+                    updateWhitelabelPreview(config);
+                } else {
+                    alert('Erro ao salvar: ' + (data.error || 'Desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao salvar configuração');
+            }
+        }
+        
+        function updateWhitelabelPreview(config) {
+            const preview = document.getElementById('wl-preview');
+            preview.innerHTML = `
+                <div style="background:linear-gradient(135deg, ${config.primaryColor}, ${config.secondaryColor}); padding:2rem; border-radius:12px;">
+                    ${config.logoUrl ? `<img src="${config.logoUrl}" style="max-width:200px; margin-bottom:1rem;">` : ''}
+                    <h3 style="color:white; margin:0;">${config.companyName || 'Sua Empresa'}</h3>
+                </div>
+            `;
+        }
+        
+        async function loadLeadsStats() {
+            try {
+                // Usar endpoint real /admin/leads
+                const response = await fetch('/admin/leads', {
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.leads) {
+                    const leads = data.leads;
+                    
+                    // Calcular estatísticas
+                    const total = leads.length;
+                    
+                    // Classificar leads por interesse (simulação baseada em dados disponíveis)
+                    const hot = leads.filter(lead => {
+                        // Leads com email E telefone são considerados "hot"
+                        const telefone = lead.telefone || lead.phone;
+                        return lead.email && telefone;
+                    }).length;
+                    
+                    const warm = leads.filter(lead => {
+                        // Leads com email OU telefone (mas não ambos) são "warm"
+                        const telefone = lead.telefone || lead.phone;
+                        return (lead.email || telefone) && !(lead.email && telefone);
+                    }).length;
+                    
+                    const cold = total - hot - warm;
+                    
+                    // Atualizar estatísticas
+                    document.getElementById('leads-total').textContent = total;
+                    document.getElementById('leads-hot').textContent = hot;
+                    document.getElementById('leads-warm').textContent = warm;
+                    document.getElementById('leads-cold').textContent = cold;
+                    
+                    // Carregar lista (últimos 10 leads)
+                    const listEl = document.getElementById('leads-list');
+                    const recentLeads = leads.slice(-10).reverse(); // Últimos 10, mais recentes primeiro
+                    
+                    if (recentLeads.length > 0) {
+                        listEl.innerHTML = recentLeads.map(lead => {
+                            // Determinar classificação
+                            let classification = 'cold';
+                            let bgColor = '#3b82f6';
+                            
+                            // Usar campos corretos: nome, telefone (não name, phone)
+                            const nome = lead.nome || lead.name || '';
+                            const telefone = lead.telefone || lead.phone || '';

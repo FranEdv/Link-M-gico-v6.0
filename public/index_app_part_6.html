@@ -1,0 +1,389 @@
+                            
+                            if (lead.email && telefone) {
+                                classification = 'hot';
+                                bgColor = '#ef4444';
+                            } else if (lead.email || telefone) {
+                                classification = 'warm';
+                                bgColor = '#f59e0b';
+                            }
+                            
+                            // Formatar data
+                            const date = new Date(lead.timestamp);
+                            const dateStr = date.toLocaleDateString('pt-BR');
+                            const timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            
+                            return `
+                                <div style="background:#1e293b; padding:1rem; border-radius:8px; margin-bottom:0.5rem; cursor:pointer;" onclick="showLeadDetails('${lead.id}')">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <div style="flex:1;">
+                                            <div style="color:#cbd5e1; font-weight:600; margin-bottom:0.25rem;">${nome || 'Visitante'}</div>
+                                            <div style="color:#94a3b8; font-size:0.85rem;">
+                                                ${lead.email ? `📧 ${lead.email}` : ''} 
+                                                ${lead.email && telefone ? ' | ' : ''}
+                                                ${telefone ? `📱 ${telefone}` : ''}
+                                            </div>
+                                            <div style="color:#64748b; font-size:0.75rem; margin-top:0.25rem;">
+                                                🕒 ${dateStr} às ${timeStr}
+                                            </div>
+                                        </div>
+                                        <div style="background:${bgColor}; color:white; padding:0.4rem 0.8rem; border-radius:6px; font-size:0.8rem; font-weight:600;">
+                                            ${classification.toUpperCase()}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    } else {
+                        listEl.innerHTML = '<p style="color:#94a3b8;">Nenhum lead capturado ainda.</p>';
+                    }
+                    
+                    console.log(`📊 Leads V2.0 carregados: ${total} total (${hot} hot, ${warm} warm, ${cold} cold)`);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar leads:', error);
+                document.getElementById('leads-list').innerHTML = '<p style="color:#ef4444;">Erro ao carregar leads. Verifique a conexão.</p>';
+            }
+        }
+        
+        // Função para carregar leads no dashboard principal
+        async function loadDashboardLeads() {
+            try {
+                const response = await fetch('/admin/leads', {
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.leads) {
+                    const leads = data.leads;
+                    const totalLeads = leads.length;
+                    
+                    // Calcular leads de hoje
+                    const today = new Date().toDateString();
+                    const leadsToday = leads.filter(lead => {
+                        const leadDate = new Date(lead.timestamp).toDateString();
+                        return leadDate === today;
+                    }).length;
+                    
+                    // Calcular conversas e mensagens
+                    let totalConversations = 0;
+                    let totalMessages = 0;
+                    let conversationsToday = 0;
+                    let messagesToday = 0;
+                    
+                    leads.forEach(lead => {
+                        if (lead.conversations && Array.isArray(lead.conversations)) {
+                            lead.conversations.forEach(conv => {
+                                totalConversations++;
+                                
+                                // Verificar se a conversa é de hoje
+                                if (conv.timestamp) {
+                                    const convDate = new Date(conv.timestamp).toDateString();
+                                    if (convDate === today) {
+                                        conversationsToday++;
+                                    }
+                                }
+                                
+                                // Contar mensagens
+                                if (conv.messages && Array.isArray(conv.messages)) {
+                                    const msgCount = conv.messages.length;
+                                    totalMessages += msgCount;
+                                    
+                                    // Contar mensagens de hoje
+                                    conv.messages.forEach(msg => {
+                                        if (msg.timestamp) {
+                                            const msgDate = new Date(msg.timestamp).toDateString();
+                                            if (msgDate === today) {
+                                                messagesToday++;
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Atualizar dashboard
+                    document.getElementById('totalLeads').textContent = totalLeads;
+                    document.getElementById('leadsToday').textContent = leadsToday;
+                    document.getElementById('conversationsToday').textContent = conversationsToday;
+                    document.getElementById('messagesSent').textContent = messagesToday;
+                    
+                    console.log(`📊 Dashboard atualizado: ${totalLeads} leads (${leadsToday} hoje), ${conversationsToday} conversas hoje, ${messagesToday} mensagens hoje`);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar leads do dashboard:', error);
+                document.getElementById('totalLeads').textContent = '0';
+                document.getElementById('leadsToday').textContent = '0';
+            }
+        }
+        
+        // Função para mostrar detalhes do lead em modal
+        function showLeadDetails(leadId) {
+            fetch('/admin/leads', {
+                headers: {
+                    'X-API-Key': 'linkmagico-api-key-2024'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.leads) {
+                    const lead = data.leads.find(l => l.id === leadId);
+                    if (lead) {
+                        const date = new Date(lead.timestamp);
+                        const dateStr = date.toLocaleDateString('pt-BR', { 
+                            day: '2-digit', 
+                            month: 'long', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        
+                        // Usar campos corretos do lead
+                        const nome = lead.nome || lead.name || 'Não informado';
+                        const telefone = lead.telefone || lead.phone || 'Não informado';
+                        const url = lead.url_origem || lead.url || 'Não disponível';
+                        
+                        const modalContent = `
+                            <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:10000; display:flex; align-items:center; justify-content:center;" onclick="this.remove()">
+                                <div style="background:#1e293b; padding:2rem; border-radius:16px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto;" onclick="event.stopPropagation()">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                                        <h2 style="color:#60a5fa; margin:0;">📋 Detalhes do Lead</h2>
+                                        <button onclick="this.closest('[style*=fixed]').remove()" style="background:#ef4444; color:white; border:none; padding:0.5rem 1rem; border-radius:8px; cursor:pointer; font-weight:600;">
+                                            ✕ Fechar
+                                        </button>
+                                    </div>
+                                    
+                                    <div style="background:#334155; padding:1.5rem; border-radius:12px; margin-bottom:1rem;">
+                                        <div style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">Nome</div>
+                                        <div style="color:#cbd5e1; font-size:1.1rem; font-weight:600;">${nome}</div>
+                                    </div>
+                                    
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                                        <div style="background:#334155; padding:1.5rem; border-radius:12px;">
+                                            <div style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">📧 Email</div>
+                                            <div style="color:#cbd5e1; font-weight:600;">${lead.email || 'Não informado'}</div>
+                                        </div>
+                                        <div style="background:#334155; padding:1.5rem; border-radius:12px;">
+                                            <div style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">📱 Telefone</div>
+                                            <div style="color:#cbd5e1; font-weight:600;">${telefone}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="background:#334155; padding:1.5rem; border-radius:12px; margin-bottom:1rem;">
+                                        <div style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">💬 Mensagem</div>
+                                        <div style="color:#cbd5e1; line-height:1.6;">${lead.message || 'Nenhuma mensagem'}</div>
+                                    </div>
+                                    
+                                    <div style="background:#334155; padding:1.5rem; border-radius:12px; margin-bottom:1rem;">
+                                        <div style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">🕒 Data de Captura</div>
+                                        <div style="color:#cbd5e1; font-weight:600;">${dateStr}</div>
+                                    </div>
+                                    
+                                    <div style="background:#334155; padding:1.5rem; border-radius:12px;">
+                                        <div style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">🔗 URL de Origem</div>
+                                        <div style="color:#60a5fa; word-break:break-all;">${url}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        document.body.insertAdjacentHTML('beforeend', modalContent);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar detalhes do lead:', error);
+                alert('Erro ao carregar detalhes do lead');
+            });
+        }
+        
+        async function exportLeads() {
+            try {
+                // Buscar todos os leads
+                const response = await fetch('/admin/leads', {
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.success && data.leads && data.leads.length > 0) {
+                    // Criar CSV
+                    const headers = ['ID', 'Nome', 'Email', 'Telefone', 'Mensagem', 'URL', 'Data/Hora'];
+                    const rows = data.leads.map(lead => {
+                        const date = new Date(lead.timestamp);
+                        const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
+                        
+                        // Usar campos corretos (nome, telefone, url_origem)
+                        const nome = lead.nome || lead.name || '';
+                        const telefone = lead.telefone || lead.phone || '';
+                        const url = lead.url_origem || lead.url || '';
+                        
+                        return [
+                            lead.id || '',
+                            nome,
+                            lead.email || '',
+                            telefone,
+                            (lead.message || '').replace(/"/g, '""'), // Escapar aspas
+                            url,
+                            dateStr
+                        ].map(field => `"${field}"`).join(',');
+                    });
+                    
+                    const csv = [headers.join(','), ...rows].join('\n');
+                    
+                    // Criar blob e download
+                    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM para UTF-8
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    
+                    const now = new Date();
+                    const filename = `leads_linkmagico_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}_${now.getHours()}${now.getMinutes()}.csv`;
+                    
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', filename);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    showToast(`✅ ${data.leads.length} leads exportados com sucesso!`, 'success');
+                } else {
+                    showToast('⚠️ Nenhum lead disponível para exportar', 'warning');
+                }
+            } catch (error) {
+                console.error('Erro ao exportar leads:', error);
+                showToast('❌ Erro ao exportar leads', 'error');
+            }
+        }
+        
+        // ===== FUNÇÕES DE BACKUP =====
+        async function createBackup() {
+            try {
+                showToast('💾 Criando backup...', 'info');
+                
+                const response = await fetch('/admin/leads/backup/create', {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast('✅ Backup criado com sucesso!', 'success');
+                    loadBackups(); // Recarregar lista
+                } else {
+                    showToast('❌ Erro ao criar backup: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao criar backup:', error);
+                showToast('❌ Erro ao criar backup', 'error');
+            }
+        }
+        
+        async function loadBackups() {
+            try {
+                const response = await fetch('/admin/leads/backup/list', {
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                const container = document.getElementById('backups-list');
+                
+                if (data.success && data.backups && data.backups.length > 0) {
+                    container.innerHTML = data.backups.map(backup => {
+                        const date = new Date(backup.timestamp);
+                        const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
+                        const sizeKB = (backup.size / 1024).toFixed(2);
+                        
+                        const typeLabels = {
+                            'manual': '👤 Manual',
+                            'daily': '⏰ Diário',
+                            'startup': '🚀 Startup',
+                            'shutdown': '🛑 Shutdown',
+                            'pre-restore': '⚠️ Pré-restauração'
+                        };
+                        
+                        const typeLabel = typeLabels[backup.type] || backup.type;
+                        
+                        return `
+                            <div style="background:#1e293b; padding:1rem; border-radius:8px; margin-bottom:0.75rem; border-left:4px solid #3b82f6;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                    <div>
+                                        <div style="color:#cbd5e1; font-weight:600; margin-bottom:0.25rem;">${typeLabel}</div>
+                                        <div style="color:#94a3b8; font-size:0.85rem;">${dateStr}</div>
+                                    </div>
+                                    <div style="text-align:right;">
+                                        <div style="color:#60a5fa; font-weight:600;">${backup.leadsCount} leads</div>
+                                        <div style="color:#94a3b8; font-size:0.85rem;">${sizeKB} KB</div>
+                                    </div>
+                                </div>
+                                <button onclick="restoreBackup('${backup.filename}')" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:600; width:100%;">
+                                    ♻️ Restaurar Este Backup
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    console.log(`📦 ${data.backups.length} backups carregados`);
+                } else {
+                    container.innerHTML = '<p style="color:#94a3b8;">Nenhum backup disponível ainda.</p>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar backups:', error);
+                document.getElementById('backups-list').innerHTML = '<p style="color:#ef4444;">Erro ao carregar backups</p>';
+            }
+        }
+        
+        async function restoreBackup(filename) {
+            if (!confirm(`⚠️ Tem certeza que deseja restaurar este backup?\n\nIsso irá substituir todos os leads atuais!\n\nUm backup do estado atual será criado antes da restauração.`)) {
+                return;
+            }
+            
+            try {
+                showToast('♻️ Restaurando backup...', 'info');
+                
+                const response = await fetch('/admin/leads/backup/restore', {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': 'linkmagico-api-key-2024',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filename })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast(`✅ Backup restaurado! ${result.leadsCount} leads recuperados.`, 'success');
+                    
+                    // Recarregar dados
+                    loadBackups();
+                    loadLeadsStats();
+                    loadDashboardLeads();
+                } else {
+                    showToast('❌ Erro ao restaurar backup: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao restaurar backup:', error);
+                showToast('❌ Erro ao restaurar backup', 'error');
+            }
+        }
+        
+        // Carregar leads do dashboard ao iniciar
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDashboardLeads();
+            // Atualizar a cada 30 segundos
+            setInterval(loadDashboardLeads, 30000);
+        });
+    </script>
+    </body>
+</html>
