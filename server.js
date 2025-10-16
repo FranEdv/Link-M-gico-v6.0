@@ -1787,6 +1787,11 @@ app.get("/excluir-dados", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "excluir-dados.html"));
 });
 
+// ===== DASHBOARD V2.0 =====
+app.get("/dashboard", requireApiKey, (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "dashboard-v2.html"));
+});
+
 // ===== ROTAS DE ADMINISTRAÇÃO DE LEADS =====
 app.get("/admin/leads", requireApiKey, (req, res) => {
     const leadSystem = getLeadSystem(req.cliente.apiKey);
@@ -3603,11 +3608,56 @@ app.get('/api/crm/templates/:crm', (req, res) => {
 
 console.log('✅ Rotas V3.0 configuradas');
 
+// ===== DASHBOARD V2.0 ROTAS =====
+app.get('/api/dashboard/stats', requireApiKey, async (req, res) => {
+    try {
+        const leadSystem = getLeadSystem(req.cliente.apiKey);
+        const leads = leadSystem.getLeads();
+        
+        const stats = {
+            totalLeads: leads.length,
+            activeLeads: leads.filter(lead => lead.status === 'ativo').length,
+            leadsToday: leads.filter(lead => {
+                const today = new Date().toISOString().split('T')[0];
+                return lead.timestamp.split('T')[0] === today;
+            }).length,
+            journeyStages: {
+                descoberta: leads.filter(lead => lead.journeyStage === 'descoberta').length,
+                negociacao: leads.filter(lead => lead.journeyStage === 'negociacao').length,
+                fidelizacao: leads.filter(lead => lead.journeyStage === 'fidelizacao').length
+            },
+            totalConversations: leads.reduce((total, lead) => total + lead.conversations.length, 0)
+        };
+        
+        res.json({ success: true, stats });
+    } catch (error) {
+        logger.error('Erro ao buscar estatísticas do dashboard:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/dashboard/analytics', requireApiKey, (req, res) => {
+    res.json({
+        success: true,
+        analytics: {
+            totalRequests: analytics.totalRequests,
+            chatRequests: analytics.chatRequests,
+            extractRequests: analytics.extractRequests,
+            leadsCaptured: analytics.leadsCaptured,
+            successfulExtractions: analytics.successfulExtractions,
+            failedExtractions: analytics.failedExtractions,
+            activeChats: analytics.activeChats.size,
+            avgResponseTime: analytics.responseTimeHistory.length > 0 ?
+                Math.round(analytics.responseTimeHistory.reduce((a, b) => a + b, 0) / analytics.responseTimeHistory.length) : 0
+        }
+    });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
         logger.info(`Server running on port ${PORT}`);
         
         console.log(`🌐 Servidor rodando em http://0.0.0.0:${PORT}` );
-        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/api/system/status` );
+        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/dashboard` );
         console.log(`🚀 LinkMágico v7.0 SUPERINTELIGENTE running on http://0.0.0.0:${PORT}` );
         console.log(`📊 Health check: http://0.0.0.0:${PORT}/health` );
         console.log(`🤖 Chatbot disponível em: http://0.0.0.0:${PORT}/chatbot` );
@@ -3622,5 +3672,6 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`🎭 Personalidades adaptativas: CONSULTIVO, EMPÁTICO, TÉCNICO, MOTIVACIONAL`);
         console.log(`🚨 Detecção de urgência: ATIVADA`);
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
+        console.log(`📊 Dashboard V2.0: http://0.0.0.0:${PORT}/dashboard`);
     });
 })();
