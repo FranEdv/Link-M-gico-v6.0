@@ -513,7 +513,7 @@ class LeadBackupSystem {
     createBackup(type = "manual") {
         try {
             const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const filename = `leads-backup-${type-${timestamp}.json`;
+            const filename = `leads-backup-${type}-${timestamp}.json`;
             const backupPath = path.join(this.backupDir, filename);
             
             const backupData = {
