@@ -45,9 +45,6 @@ try {
 
 const app = express();
 
-// Declarando conversationHistories no escopo global ou adequado
-const conversationHistories = new Map();
-
 // ===== DASHBOARD V2.0 - SISTEMA DE CONFIGURAÇÕES =====
 class DashboardV2 {
     constructor() {
@@ -301,39 +298,97 @@ class DashboardV2 {
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: 500;">🧠 SuperInteligência</label>
                         <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
-                            <option>Ativada</option>
-                            <option>Desativada</option>
+                            <option>Ativado</option>
+                            <option>Desativado</option>
                         </select>
                     </div>
-                    
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: 500;">🎯 Captura de Leads</label>
                         <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
-                            <option>Automática</option>
-                            <option>Manual</option>
+                            <option>Ativado</option>
+                            <option>Desativado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">📞 Extração de Contatos</label>
+                        <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
+                            <option>Ativado</option>
+                            <option>Desativado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">📅 Agendamento</label>
+                        <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
+                            <option>Ativado</option>
+                            <option>Desativado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">🔐 Backup Automático</label>
+                        <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
+                            <option>Ativado</option>
+                            <option>Desativado</option>
                         </select>
                     </div>
                 </div>
             </div>
 
-            <div class="lm-system-status" style="
-                background: #F0F9FF;
-                padding: 15px;
+            <div class="lm-integrations-section" style="
+                background: #F8FAFC;
+                padding: 20px;
                 border-radius: 10px;
-                border-left: 4px solid #3B82F6;
+                margin-bottom: 20px;
             ">
-                <h4 style="color: #1E40AF; margin: 0;">✅ Todos os sistemas operando normalmente</h4>
-                <p style="margin: 5px 0 0 0; color: #6B7280; font-size: 0.9rem;">
-                    Última verificação: ${new Date().toLocaleString()}
-                </p>
+                <h3 style="color: #374151;">🔌 Integrações</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> Gmail
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> WhatsApp
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> ChatGPT
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> CRM
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> Whitelabel
+                    </label>
+                </div>
+            </div>
+
+            <div class="lm-personalities-section" style="
+                background: #F8FAFC;
+                padding: 20px;
+                border-radius: 10px;
+            ">
+                <h3 style="color: #374151;">🎭 Personalidades do Chatbot</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> Consultivo
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> Empático
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> Técnico
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox"> Motivacional
+                    </label>
+                </div>
             </div>
         </div>`;
     }
 }
 
-// Inicializar Dashboard V2.0
 const dashboardV2 = new DashboardV2();
 dashboardV2.carregarConfig();
+
+// Declarando conversationHistories no escopo global ou adequado
+const conversationHistories = new Map();
 
 // ===== SISTEMA DE ARMAZENAMENTO DE LEADS PERSISTENTE =====
 function getTenantLeadsFilePath(apiKey) {
@@ -1476,8 +1531,9 @@ class SistemaExtracaoApurado {
     constructor() {
         this.termosBonus = [
             'bônus', 'bonus', 'brinde', 'presente', 'extra', 'grátis', 'gratis',
-            'incluído', 'incluido', 'adicional', 'oferta', 'promocional', 'regalo', 
-            'complemento', 'vantagem', 'benefício', 'beneficio', 'exclusivo', 'limitado', 'especial', 'oferta especial'
+            'incluído', 'incluido', 'adicional', 'oferta', 'promocional',
+            'regalo', 'complemento', 'vantagem', 'benefício', 'beneficio',
+            'exclusivo', 'limitado', 'especial', 'oferta especial'
         ];
     }
 
@@ -2071,52 +2127,6 @@ app.get("/privacy.html", (req, res) => {
 
 app.get("/excluir-dados", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "excluir-dados.html"));
-});
-
-// ===== ROTAS DO DASHBOARD V2.0 =====
-app.get('/api/dashboard/v2/config', requireApiKey, (req, res) => {
-    res.json({
-        success: true,
-        dashboard: dashboardV2.getConfig()
-    });
-});
-
-app.post('/api/dashboard/v2/config', requireApiKey, (req, res) => {
-    try {
-        const novasConfigs = req.body;
-        const configAtualizada = dashboardV2.updateConfig(novasConfigs);
-        res.json({
-            success: true,
-            message: 'Configurações atualizadas com sucesso',
-            config: configAtualizada
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: 'Erro ao atualizar configurações'
-        });
-    }
-});
-
-app.get('/admin/dashboard', requireApiKey, (req, res) => {
-    const adminHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Admin - LinkMágico V7.0</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Inter', sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
-            .container { max-width: 1200px; margin: 0 auto; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            ${dashboardV2.gerarPainelAdmin()}
-        </div>
-    </body>
-    </html>`;
-    res.send(adminHTML);
 });
 
 // ===== ROTAS DE ADMINISTRAÇÃO DE LEADS =====
@@ -3336,9 +3346,6 @@ function generateFullChatbotHTML(pageData = {}, robotName = 'Assistente IA', cus
     };
     
     const botoesFixos = gerarBotoesFixos(contatos, safeRobotName);
-    
-    // 🎯 ADICIONAR DASHBOARD V2.0 AO CHATBOT
-    const dashboardV2HTML = dashboardV2.gerarDashboardHTML();
 
     return `<!doctype html>
 <html lang="pt-BR">
@@ -3382,62 +3389,10 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%
 .contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:5px}
 .contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)}
 .lm-botoes-fixos a, .lm-botoes-fixos button { font-size: 0.85rem; }
-
-/* Dashboard V2.0 Styles */
-.lm-dashboard-v2 {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 15px;
-    border-radius: 15px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    z-index: 10000;
-    max-width: 300px;
-    font-family: 'Inter', sans-serif;
-    border: 2px solid rgba(255,255,255,0.2);
-    transition: all 0.3s ease;
-}
-.lm-dashboard-v2:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
-}
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-.lm-status-indicator {
-    width: 12px;
-    height: 12px;
-    background: #10B981;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@media (max-width:768px){
-    .chat-container{height:100vh;border-radius:0}
-    .chat-message{max-width:85%}
-    .lead-form{margin:10px;padding:20px}
-    .contact-button{min-width:100px;font-size:0.8rem}
-    .lm-botoes-fixos{padding:10px !important}
-    .lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}
-    .lm-dashboard-v2 {
-        position: relative;
-        top: auto;
-        right: auto;
-        margin: 10px;
-        max-width: none;
-    }
-}
+@media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}.lead-form{margin:10px;padding:20px}.contact-button{min-width:100px;font-size:0.8rem}.lm-botoes-fixos{padding:10px !important}.lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}}
 </style>
 </head>
-<body>
-<!-- 🎯 DASHBOARD V2.0 IMPLEMENTADO -->
-${dashboardV2HTML}
-
-<div class="chat-container">
+<body>\n<div class=\"chat-container\">\n        ${dashboardV2.gerarDashboardHTML()}
 <div class="chat-header">
 <h1>${safeRobotName}</h1>
 <div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div>
@@ -3592,6 +3547,56 @@ document.getElementById('leadName').focus();
 </body>
 </html>`;
 }
+
+// ===== ROTAS DO DASHBOARD V2.0 =====
+app.get('/api/dashboard/v2/config', requireApiKey, (req, res) => {
+    res.json({
+        success: true,
+        dashboard: dashboardV2.getConfig()
+    });
+});
+
+app.post('/api/dashboard/v2/config', requireApiKey, (req, res) => {
+    try {
+        const novasConfigs = req.body;
+        const configAtualizada = dashboardV2.updateConfig(novasConfigs);
+        res.json({
+            success: true,
+            message: 'Configurações atualizadas com sucesso',
+            config: configAtualizada
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar configurações'
+        });
+    }
+});
+
+app.get('/admin/dashboard', requireApiKey, (req, res) => {
+    const adminHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin - LinkMágico V7.0</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Inter', sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
+            .container { max-width: 1200px; margin: 0 auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            ${dashboardV2.gerarPainelAdmin()}
+        </div>
+    </body>
+    </html>`;
+    res.send(adminHTML);
+});
+
+// ... [RESTANTE DO CÓDIGO ORIGINAL MANTIDO]
+
+console.log('✅ Dashboard V2.0 - Sistema de configurações implementado');
 
 // Widget JS atualizado
 app.get("/public/widget.js", (req, res) => {
@@ -4008,7 +4013,5 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`🎭 Personalidades adaptativas: CONSULTIVO, EMPÁTICO, TÉCNICO, MOTIVACIONAL`);
         console.log(`🚨 Detecção de urgência: ATIVADA`);
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
-        console.log(`🎛️  Dashboard V2.0: /api/dashboard/v2/config`);
-        console.log(`⚙️  Painel Admin: /admin/dashboard`);
     });
 })();
