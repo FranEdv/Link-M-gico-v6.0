@@ -218,3 +218,22 @@
     <script src="/app_scripts.js"></script>
 </body>
 </html>
+
+
+<div id="dashboard-container"></div>"></div>
+
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/api/dashboard-html')
+            .then(response => response.json())
+            .then(data => {
+                if (data.html) {
+                    document.getElementById('dashboard-container').innerHTML = data.html;
+                }
+            })
+            .catch(error => console.error('Erro ao carregar o dashboard:', error));
+    });
+</script>
+
