@@ -4015,3 +4015,14 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
     });
 })();
+
+
+// Rota para fornecer o HTML do dashboard V2
+app.get('/api/dashboard-html', (req, res) => {
+    try {
+        const dashboardHTML = dashboardV2.gerarDashboardHTML();
+        res.json({ html: dashboardHTML });
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao gerar HTML do dashboard' });
+    }
+});
