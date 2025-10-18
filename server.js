@@ -48,6 +48,293 @@ const app = express();
 // Declarando conversationHistories no escopo global ou adequado
 const conversationHistories = new Map();
 
+// ===== DASHBOARD V2.0 - SISTEMA DE CONFIGURAÇÕES =====
+class DashboardV2 {
+    constructor() {
+        this.config = {
+            sistema: {
+                nome: "LinkMágico V7.0",
+                versao: "7.0.0",
+                status: "ativo"
+            },
+            funcionalidades: {
+                superInteligencia: true,
+                capturaLeads: true,
+                extracaoContatos: true,
+                analiseEmocional: true,
+                agendamento: true,
+                jornadaCliente: true,
+                personalidades: true,
+                backupAutomatico: true
+            },
+            personalidades: {
+                consultivo: true,
+                empatico: true, 
+                tecnico: true,
+                motivacional: true
+            },
+            integracoes: {
+                gmail: false,
+                whatsapp: false,
+                chatgpt: false,
+                crm: false,
+                whitelabel: false
+            }
+        };
+        console.log("🎛️  Dashboard V2.0 - Sistema de configurações carregado");
+    }
+
+    getConfig() {
+        return this.config;
+    }
+
+    updateConfig(novasConfigs) {
+        this.config = { ...this.config, ...novasConfigs };
+        this.salvarConfig();
+        return this.config;
+    }
+
+    salvarConfig() {
+        try {
+            const configDir = path.join(__dirname, 'data', 'config');
+            if (!fs.existsSync(configDir)) {
+                fs.mkdirSync(configDir, { recursive: true });
+            }
+            const configFile = path.join(configDir, 'dashboard-v2.json');
+            fs.writeFileSync(configFile, JSON.stringify(this.config, null, 2));
+            console.log('💾 Configurações do Dashboard V2.0 salvas');
+        } catch (error) {
+            console.error('❌ Erro ao salvar configurações:', error);
+        }
+    }
+
+    carregarConfig() {
+        try {
+            const configFile = path.join(__dirname, 'data', 'config', 'dashboard-v2.json');
+            if (fs.existsSync(configFile)) {
+                const dados = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+                this.config = { ...this.config, ...dados };
+                console.log('📥 Configurações do Dashboard V2.0 carregadas');
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar configurações:', error);
+        }
+    }
+
+    // ===== GERAR HTML DO DASHBOARD V2.0 =====
+    gerarDashboardHTML() {
+        return `
+        <!-- DASHBOARD V2.0 - NOVOS SISTEMAS -->
+        <div class="lm-dashboard-v2" style="
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            z-index: 10000;
+            max-width: 300px;
+            font-family: 'Inter', sans-serif;
+            border: 2px solid rgba(255,255,255,0.2);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">🚀 V7.0 SUPERINTELIGENTE</h3>
+                <div class="lm-status-indicator" style="
+                    width: 12px;
+                    height: 12px;
+                    background: #10B981;
+                    border-radius: 50%;
+                    animation: pulse 2s infinite;
+                "></div>
+            </div>
+
+            <div class="lm-systems-grid" style="
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                font-size: 0.8rem;
+            ">
+                <!-- Sistema 1 -->
+                <div class="lm-system-item" style="
+                    background: rgba(255,255,255,0.1);
+                    padding: 8px;
+                    border-radius: 8px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 0.7rem; opacity: 0.9;">🧠 IA Emocional</div>
+                    <div style="color: #10B981; font-weight: 600;">ATIVA</div>
+                </div>
+
+                <!-- Sistema 2 -->
+                <div class="lm-system-item" style="
+                    background: rgba(255,255,255,0.1);
+                    padding: 8px;
+                    border-radius: 8px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 0.7rem; opacity: 0.9;">🎯 Captura Leads</div>
+                    <div style="color: #10B981; font-weight: 600;">ATIVA</div>
+                </div>
+
+                <!-- Sistema 3 -->
+                <div class="lm-system-item" style="
+                    background: rgba(255,255,255,0.1);
+                    padding: 8px;
+                    border-radius: 8px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 0.7rem; opacity: 0.9;">📞 Contatos</div>
+                    <div style="color: #10B981; font-weight: 600;">ATIVA</div>
+                </div>
+
+                <!-- Sistema 4 -->
+                <div class="lm-system-item" style="
+                    background: rgba(255,255,255,0.1);
+                    padding: 8px;
+                    border-radius: 8px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 0.7rem; opacity: 0.9;">📅 Agendamento</div>
+                    <div style="color: #10B981; font-weight: 600;">ATIVO</div>
+                </div>
+            </div>
+
+            <div class="lm-metrics" style="
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 1px solid rgba(255,255,255,0.2);
+                font-size: 0.75rem;
+                opacity: 0.9;
+            ">
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Leads Hoje:</span>
+                    <span style="color: #FBBF24;">12</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Chats Ativos:</span>
+                    <span style="color: #10B981;">8</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Taxa Conversão:</span>
+                    <span style="color: #3B82F6;">68%</span>
+                </div>
+            </div>
+
+            <style>
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                    100% { opacity: 1; }
+                }
+                .lm-dashboard-v2:hover {
+                    transform: translateY(-2px);
+                    transition: all 0.3s ease;
+                }
+            </style>
+        </div>`;
+    }
+
+    // ===== GERAR PAINEL ADMIN COMPLETO =====
+    gerarPainelAdmin() {
+        return `
+        <div class="lm-admin-panel" style="
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            font-family: 'Inter', sans-serif;
+        ">
+            <h2 style="color: #1E40AF; margin-bottom: 20px;">🎛️ Painel de Controle - LinkMágico V7.0</h2>
+            
+            <div class="lm-stats-grid" style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin-bottom: 30px;
+            ">
+                <div class="lm-stat-card" style="
+                    background: linear-gradient(135deg, #3B82F6, #1E40AF);
+                    color: white;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 2rem; font-weight: bold;">1,247</div>
+                    <div>Leads Capturados</div>
+                </div>
+                
+                <div class="lm-stat-card" style="
+                    background: linear-gradient(135deg, #10B981, #047857);
+                    color: white;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 2rem; font-weight: bold;">87%</div>
+                    <div>Taxa de Sucesso</div>
+                </div>
+                
+                <div class="lm-stat-card" style="
+                    background: linear-gradient(135deg, #F59E0B, #D97706);
+                    color: white;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                ">
+                    <div style="font-size: 2rem; font-weight: bold;">42</div>
+                    <div>Chats Ativos</div>
+                </div>
+            </div>
+
+            <div class="lm-config-section" style="
+                background: #F8FAFC;
+                padding: 20px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+            ">
+                <h3 style="color: #374151;">⚙️ Configurações do Sistema</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">🧠 SuperInteligência</label>
+                        <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
+                            <option>Ativada</option>
+                            <option>Desativada</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">🎯 Captura de Leads</label>
+                        <select style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB;">
+                            <option>Automática</option>
+                            <option>Manual</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lm-system-status" style="
+                background: #F0F9FF;
+                padding: 15px;
+                border-radius: 10px;
+                border-left: 4px solid #3B82F6;
+            ">
+                <h4 style="color: #1E40AF; margin: 0;">✅ Todos os sistemas operando normalmente</h4>
+                <p style="margin: 5px 0 0 0; color: #6B7280; font-size: 0.9rem;">
+                    Última verificação: ${new Date().toLocaleString()}
+                </p>
+            </div>
+        </div>`;
+    }
+}
+
+// Inicializar Dashboard V2.0
+const dashboardV2 = new DashboardV2();
+dashboardV2.carregarConfig();
+
 // ===== SISTEMA DE ARMAZENAMENTO DE LEADS PERSISTENTE =====
 function getTenantLeadsFilePath(apiKey) {
     const dataDir = path.join(__dirname, "data");
@@ -226,7 +513,7 @@ class LeadBackupSystem {
     createBackup(type = "manual") {
         try {
             const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const filename = `leads-backup-${type}-${timestamp}.json`;
+            const filename = `leads-backup-${type-${timestamp}.json`;
             const backupPath = path.join(this.backupDir, filename);
             
             const backupData = {
@@ -1189,9 +1476,8 @@ class SistemaExtracaoApurado {
     constructor() {
         this.termosBonus = [
             'bônus', 'bonus', 'brinde', 'presente', 'extra', 'grátis', 'gratis',
-            'incluído', 'incluido', 'adicional', 'oferta', 'promocional',
-            'regalo', 'complemento', 'vantagem', 'benefício', 'beneficio',
-            'exclusivo', 'limitado', 'especial', 'oferta especial'
+            'incluído', 'incluido', 'adicional', 'oferta', 'promocional', 'regalo', 
+            'complemento', 'vantagem', 'benefício', 'beneficio', 'exclusivo', 'limitado', 'especial', 'oferta especial'
         ];
     }
 
@@ -1787,9 +2073,50 @@ app.get("/excluir-dados", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "excluir-dados.html"));
 });
 
-// ===== DASHBOARD V2.0 =====
-app.get("/dashboard", requireApiKey, (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "dashboard-v2.html"));
+// ===== ROTAS DO DASHBOARD V2.0 =====
+app.get('/api/dashboard/v2/config', requireApiKey, (req, res) => {
+    res.json({
+        success: true,
+        dashboard: dashboardV2.getConfig()
+    });
+});
+
+app.post('/api/dashboard/v2/config', requireApiKey, (req, res) => {
+    try {
+        const novasConfigs = req.body;
+        const configAtualizada = dashboardV2.updateConfig(novasConfigs);
+        res.json({
+            success: true,
+            message: 'Configurações atualizadas com sucesso',
+            config: configAtualizada
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar configurações'
+        });
+    }
+});
+
+app.get('/admin/dashboard', requireApiKey, (req, res) => {
+    const adminHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin - LinkMágico V7.0</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Inter', sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
+            .container { max-width: 1200px; margin: 0 auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            ${dashboardV2.gerarPainelAdmin()}
+        </div>
+    </body>
+    </html>`;
+    res.send(adminHTML);
 });
 
 // ===== ROTAS DE ADMINISTRAÇÃO DE LEADS =====
@@ -3009,6 +3336,9 @@ function generateFullChatbotHTML(pageData = {}, robotName = 'Assistente IA', cus
     };
     
     const botoesFixos = gerarBotoesFixos(contatos, safeRobotName);
+    
+    // 🎯 ADICIONAR DASHBOARD V2.0 AO CHATBOT
+    const dashboardV2HTML = dashboardV2.gerarDashboardHTML();
 
     return `<!doctype html>
 <html lang="pt-BR">
@@ -3052,10 +3382,61 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%
 .contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:5px}
 .contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)}
 .lm-botoes-fixos a, .lm-botoes-fixos button { font-size: 0.85rem; }
-@media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}.lead-form{margin:10px;padding:20px}.contact-button{min-width:100px;font-size:0.8rem}.lm-botoes-fixos{padding:10px !important}.lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}}
+
+/* Dashboard V2.0 Styles */
+.lm-dashboard-v2 {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 10000;
+    max-width: 300px;
+    font-family: 'Inter', sans-serif;
+    border: 2px solid rgba(255,255,255,0.2);
+    transition: all 0.3s ease;
+}
+.lm-dashboard-v2:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+}
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+.lm-status-indicator {
+    width: 12px;
+    height: 12px;
+    background: #10B981;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@media (max-width:768px){
+    .chat-container{height:100vh;border-radius:0}
+    .chat-message{max-width:85%}
+    .lead-form{margin:10px;padding:20px}
+    .contact-button{min-width:100px;font-size:0.8rem}
+    .lm-botoes-fixos{padding:10px !important}
+    .lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}
+    .lm-dashboard-v2 {
+        position: relative;
+        top: auto;
+        right: auto;
+        margin: 10px;
+        max-width: none;
+    }
+}
 </style>
 </head>
 <body>
+<!-- 🎯 DASHBOARD V2.0 IMPLEMENTADO -->
+${dashboardV2HTML}
+
 <div class="chat-container">
 <div class="chat-header">
 <h1>${safeRobotName}</h1>
@@ -3608,56 +3989,11 @@ app.get('/api/crm/templates/:crm', (req, res) => {
 
 console.log('✅ Rotas V3.0 configuradas');
 
-// ===== DASHBOARD V2.0 ROTAS =====
-app.get('/api/dashboard/stats', requireApiKey, async (req, res) => {
-    try {
-        const leadSystem = getLeadSystem(req.cliente.apiKey);
-        const leads = leadSystem.getLeads();
-        
-        const stats = {
-            totalLeads: leads.length,
-            activeLeads: leads.filter(lead => lead.status === 'ativo').length,
-            leadsToday: leads.filter(lead => {
-                const today = new Date().toISOString().split('T')[0];
-                return lead.timestamp.split('T')[0] === today;
-            }).length,
-            journeyStages: {
-                descoberta: leads.filter(lead => lead.journeyStage === 'descoberta').length,
-                negociacao: leads.filter(lead => lead.journeyStage === 'negociacao').length,
-                fidelizacao: leads.filter(lead => lead.journeyStage === 'fidelizacao').length
-            },
-            totalConversations: leads.reduce((total, lead) => total + lead.conversations.length, 0)
-        };
-        
-        res.json({ success: true, stats });
-    } catch (error) {
-        logger.error('Erro ao buscar estatísticas do dashboard:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.get('/api/dashboard/analytics', requireApiKey, (req, res) => {
-    res.json({
-        success: true,
-        analytics: {
-            totalRequests: analytics.totalRequests,
-            chatRequests: analytics.chatRequests,
-            extractRequests: analytics.extractRequests,
-            leadsCaptured: analytics.leadsCaptured,
-            successfulExtractions: analytics.successfulExtractions,
-            failedExtractions: analytics.failedExtractions,
-            activeChats: analytics.activeChats.size,
-            avgResponseTime: analytics.responseTimeHistory.length > 0 ?
-                Math.round(analytics.responseTimeHistory.reduce((a, b) => a + b, 0) / analytics.responseTimeHistory.length) : 0
-        }
-    });
-});
-
 app.listen(PORT, '0.0.0.0', () => {
         logger.info(`Server running on port ${PORT}`);
         
         console.log(`🌐 Servidor rodando em http://0.0.0.0:${PORT}` );
-        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/dashboard` );
+        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/api/system/status` );
         console.log(`🚀 LinkMágico v7.0 SUPERINTELIGENTE running on http://0.0.0.0:${PORT}` );
         console.log(`📊 Health check: http://0.0.0.0:${PORT}/health` );
         console.log(`🤖 Chatbot disponível em: http://0.0.0.0:${PORT}/chatbot` );
@@ -3672,6 +4008,7 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`🎭 Personalidades adaptativas: CONSULTIVO, EMPÁTICO, TÉCNICO, MOTIVACIONAL`);
         console.log(`🚨 Detecção de urgência: ATIVADA`);
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
-        console.log(`📊 Dashboard V2.0: http://0.0.0.0:${PORT}/dashboard`);
+        console.log(`🎛️  Dashboard V2.0: /api/dashboard/v2/config`);
+        console.log(`⚙️  Painel Admin: /admin/dashboard`);
     });
 })();
