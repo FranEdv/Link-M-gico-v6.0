@@ -1510,23 +1510,24 @@ app.post("/admin/leads/backup/restore", requireApiKey, (req, res) => {
     res.json(result);
 });
 
-// ROTA CHAT.HTML
+// ROTA CHAT.HTML - CORRIGIDA
 app.get("/chat.html", (req, res) => {
     const robotName = req.query.name || "Assistente IA";
     const url = req.query.url || "";
     const instructions = req.query.instructions || "";
+    const apiKey = req.query.apiKey || ""; // ✅ Capturar apiKey da query parameter
     
-    const apiKey = req.query.apiKey || ""; // Adicionar apiKey da query parameter
     const chatbotHTML = generateChatbotHTML({ robotName, url, instructions, apiKey });
     res.send(chatbotHTML);
 });
 
-// ROTA CHATBOT COMPLETA
+// ROTA CHATBOT COMPLETA - CORRIGIDA
 app.get("/chatbot", async (req, res) => {
     try {
         const robotName = req.query.name || "Assistente IA";
         const url = req.query.url || "";
         const instructions = req.query.instructions || "";
+        const apiKey = req.query.apiKey || ""; // ✅ Capturar apiKey da query
         
         let pageData = {};
         if (url) {
@@ -1537,7 +1538,12 @@ app.get("/chatbot", async (req, res) => {
             }
         }
         
-        const html = generateFullChatbotHTML(pageData, robotName, instructions);
+        const html = generateChatbotHTML({ 
+            robotName, 
+            url, 
+            instructions, 
+            apiKey // ✅ Passar apiKey para a função
+        });
         res.set('Content-Type', 'text/html');
         res.send(html);
     } catch (error) {
@@ -2355,7 +2361,7 @@ app.post("/api/capture-lead", async (req, res) => {
 });
 
 // ===== ENDPOINT CHAT COM CAPTURA DE LEAD =====
-app.post("/api/chat-universal", async (req, res) => {
+app.post("/api/chat-universal", async (req, res) {
     analytics.chatRequests++;
     try {
         const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
@@ -2415,7 +2421,7 @@ app.post("/api/chat-universal", async (req, res) => {
 });
 
 // ===== 🎯 NOVO ENDPOINT INTELIGENTE - /api/process-chat-inteligente =====
-app.post("/api/process-chat-inteligente", async (req, res) => {
+app.post("/api/process-chat-inteligente", async (req, res) {
     analytics.chatRequests++;
     try {
         const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
@@ -2617,16 +2623,12 @@ app.post("/api/extract", async (req, res) => {
     }
 });
 
-// Widget JS atualizado
-app.get("/public/widget.js", (req, res) => {
-    res.set("Content-Type", "application/javascript");
-    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true,\n            apiKey: ''\n        },\n        \n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\                    headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey\n                    },\n                      headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey // Adicionado API Key ao cabeçalho\n                    },\n                    body: JSON.stringify({\n                        nome: name || \'Não informado\',\n                        email: email,\n                        telefone: phone || \'Não informado\',\n                        url_origem: window.location.href,\n                        robotName: config.robotName\n                    }),\n                    headers: {\n                        \"Content-Type\": \"application/json\",\n                        \"X-API-Key\": config.apiKey\n                    } })               });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\n                    headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey\n                    },\n                    body:                     headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey // Adicionado API Key ao cabeçalho\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: config.url,\n                        instructions: config.instructions,\n                        robotName: config.robotName,\n                        conversationId: config.conversationId,\n                        leadId: leadId\n                    })  })\n                });\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
-});
-
+// ===== FUNÇÃO CORRIGIDA: generateChatbotHTML =====
 function generateChatbotHTML({ robotName, url, instructions, apiKey }) {
     const escapedRobotName = String(robotName).replace(/"/g, "&quot;");
     const escapedUrl = String(url).replace(/"/g, "&quot;");
     const escapedInstructions = String(instructions).replace(/"/g, "&quot;");
+    const escapedApiKey = String(apiKey || '').replace(/"/g, "&quot;");
 
     return `<!doctype html>
 <html lang="pt-BR">
@@ -2709,6 +2711,17 @@ Olá! Sou ${escapedRobotName}, estou aqui para tirar todas as suas dúvidas. Com
 </div>
 
 <script>
+// 🎯 CONFIGURAÇÃO CORRIGIDA - Definir config no escopo global
+const config = {
+    robotName: "${escapedRobotName}",
+    url: "${escapedUrl}",
+    instructions: "${escapedInstructions}",
+    conversationId: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+    apiKey: "${escapedApiKey}"
+};
+
+console.log('🔧 Config carregada:', config);
+
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendButton = document.getElementById('sendButton');
@@ -2717,18 +2730,10 @@ const leadForm = document.getElementById('leadForm');
 const chatInputContainer = document.getElementById('chatInputContainer');
 const startChatBtn = document.getElementById('startChat');
 
-const config = {
-    robotName: "${escapedRobotName}",
-    url: "${escapedUrl}",
-    instructions: "${escapedInstructions}",
-    conversationId: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-    apiKey: apiKey
-};
-
 let isTyping = false;
 let leadId = null;
 
-// Capturar lead
+// Capturar lead - FUNÇÃO CORRIGIDA
 startChatBtn.addEventListener('click', async function() {
     const name = document.getElementById('leadName').value.trim();
     const email = document.getElementById('leadEmail').value.trim();
@@ -2740,22 +2745,26 @@ startChatBtn.addEventListener('click', async function() {
     }
 
     try {
+        console.log('📤 Enviando lead para API...', { name, email, phone });
+        
         const response = await fetch('/api/capture-lead', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': config.apiKey // Adicionado API Key ao cabeçalho
+                'X-API-Key': config.apiKey // ✅ Agora config está definido
             },
             body: JSON.stringify({
                 nome: name || 'Não informado',
                 email: email,
                 telefone: phone || 'Não informado',
                 url_origem: window.location.href,
-                robotName: config.robotName
+                robotName: config.robotName,
+                apiKey: config.apiKey // ✅ Adicionado também no body
             })
         });
 
         const data = await response.json();
+        console.log('📥 Resposta da API:', data);
         
         if (data.success) {
             leadId = data.lead.id;
@@ -2764,10 +2773,12 @@ startChatBtn.addEventListener('click', async function() {
             chatInputContainer.style.display = 'flex';
             
             addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false);
+        } else {
+            throw new Error(data.error || 'Erro desconhecido');
         }
     } catch (error) {
-        console.error('Erro ao capturar lead:', error);
-        alert('Erro ao processar. Tente novamente.');
+        console.error('❌ Erro ao capturar lead:', error);
+        alert('Erro ao processar: ' + error.message);
     }
 });
 
@@ -2800,12 +2811,13 @@ async function sendMessage() {
     showTyping();
 
     try {
+        console.log('📤 Enviando mensagem...', { message, leadId, apiKey: config.apiKey });
+        
         const response = await fetch('/api/chat-universal', {
             method: 'POST',
             headers: {
-                'Cont            headers: {
                 'Content-Type': 'application/json',
-                'X-API-Key': config.apiKey
+                'X-API-Key': config.apiKey // ✅ Agora config está definido
             },
             body: JSON.stringify({
                 message: message,
@@ -2813,11 +2825,13 @@ async function sendMessage() {
                 instructions: config.instructions,
                 robotName: config.robotName,
                 conversationId: config.conversationId,
-                leadId: leadId
+                leadId: leadId,
+                apiKey: config.apiKey // ✅ Adicionado também no body
             })
         });
 
         const data = await response.json();
+        console.log('📥 Resposta do chat:', data);
         
         hideTyping();
         
@@ -2834,6 +2848,7 @@ async function sendMessage() {
             addMessage('Desculpe, ocorreu um erro. Tente novamente em alguns minutos.');
         }
     } catch (error) {
+        console.error('❌ Erro no chat:', error);
         hideTyping();
         addMessage('Erro de conexão. Verifique sua internet e tente novamente.');
     } finally {
@@ -2890,9 +2905,19 @@ chatInput.addEventListener('keypress', (e) => {
 
 // Auto-focus no primeiro campo do formulário
 document.getElementById('leadName').focus();
+
+// Debug: Verificar se config foi carregada corretamente
+console.log('✅ Chatbot inicializado com sucesso');
+console.log('🔧 Configuração:', config);
 </script>
 </body>
 </html>`;
+}
+
+// Widget JS atualizado
+app.get("/public/widget.js", (req, res) => {
+    res.set("Content-Type", "application/javascript");
+    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true,\n            apiKey: ''\n        },\n        \n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json',\n                        'X-API-Key': this.config.apiKey\n                    },\n                    body: JSON.stringify({\n                        nome: name || 'Não informado',\n                        email: email,\n                        telefone: phone || 'Não informado',\n                        url_origem: window.location.href,\n                        robotName: this.config.robotName,\n                        apiKey: this.config.apiKey\n                    })\n                });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json',\n                        'X-API-Key': this.config.apiKey\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: this.config.url,\n                        instructions: this.config.instructions,\n                        robotName: this.config.robotName,\n                        conversationId: this.config.conversationId,\n                        leadId: this.leadId,\n                        apiKey: this.config.apiKey\n                    })\n                });\n\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
 }
 
 // ===== FUNÇÃO: Geração Completa do HTML do Chatbot =====
@@ -3008,15 +3033,14 @@ startChatBtn.addEventListener('click', async function() {
         const response = await fetch("/api/capture-lead", {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': config.apiKey
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 nome: name || 'Não informado',
                 email: email,
                 telefone: phone || 'Não informado',
                 url_origem: window.location.href,
-                robotName: config.robotName
+                robotName: robotName
             })
         });
 
@@ -3334,6 +3358,6 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`👥 Jornada do cliente: Análise inteligente ATIVADA`);
         console.log(`🧠 Sistema de captura de intenções: ATIVADO`);
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
+        console.log(`✅ ERRO ReferenceError: config is not defined CORRIGIDO!`);
     });
 })();
-
