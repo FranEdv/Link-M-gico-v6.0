@@ -1,0 +1,18 @@
+{
+  "usage": [
+    [
+      "lm_016ef0e7_cc39362db87632a7c5723c300f47370c",
+      {
+        "daily": {
+          "date": "Sun Sep 28 2025",
+          "requests": 0
+        },
+        "monthly": {
+          "month": "2025-09",
+          "requests": 0
+        }
+      }
+    ]
+  ],
+  "saved": "2025-09-28T12:45:03.400Z"
+}
