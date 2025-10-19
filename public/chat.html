@@ -771,6 +771,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const pageUrl = urlParams.get('url');
         const robotNameParam = urlParams.get('name');
+        const apiKey = urlParams.get('apiKey') || '';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -1046,7 +1047,8 @@
                         pageData: pageData,
                         robotName: robotName,
                         conversationId: conversationId,
-                        instructions: customInstructions
+                        instructions: customInstructions,
+                        apiKey: apiKey
                     })
                 });
                 

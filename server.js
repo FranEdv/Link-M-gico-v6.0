@@ -53,58 +53,62 @@ const conversationHistories = new Map();
 // ===== SISTEMA DE ARMAZENAMENTO DE LEADS PERSISTENTE =====
 class LeadCaptureSystem {
     constructor() {
-        // Usar diretório ./data para persistência real (não /tmp que é efêmero)
-        // /tmp é limpo a cada restart no Render, perdendo todos os leads
+        // Usar diretório ./data/leads para persistência multi-tenant
         const dataDir = path.join(__dirname, "data");
-        this.leadsFilePath = path.join(dataDir, "leads.json");
+        this.leadsDir = path.join(dataDir, "leads");
         this.ensureDataDirectory();
-        this.leads = this.loadLeads();
-        console.log(`📊 Sistema de Leads Inicializado: ${this.leads.length} leads carregados`);
-        console.log(`💾 Arquivo de leads: ${this.leadsFilePath}`);
+        console.log(`📊 Sistema de Leads Multi-Tenant Inicializado`);
+        console.log(`📁 Diretório de leads: ${this.leadsDir}`);
     }
 
     ensureDataDirectory() {
         try {
-            const dir = path.dirname(this.leadsFilePath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-                console.log(`📁 Diretório criado: ${dir}`);
+            if (!fs.existsSync(this.leadsDir)) {
+                fs.mkdirSync(this.leadsDir, { recursive: true });
+                console.log(`📁 Diretório criado: ${this.leadsDir}`);
             }
         } catch (error) {
             console.error("❌ Erro ao criar diretório:", error);
-            // Fallback para diretório atual se data/ não funcionar
-            this.leadsFilePath = path.join(__dirname, "leads.json");
-            console.log(`🔄 Usando fallback: ${this.leadsFilePath}`);
         }
     }
 
-    loadLeads() {
+    getLeadsFilePath(apiKey) {
+        // Cada API Key tem seu próprio arquivo de leads
+        const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+        return path.join(this.leadsDir, `${sanitizedKey}.json`);
+    }
+
+    loadLeads(apiKey) {
         try {
-            if (fs.existsSync(this.leadsFilePath)) {
-                const data = fs.readFileSync(this.leadsFilePath, "utf8");
+            const filePath = this.getLeadsFilePath(apiKey);
+            if (fs.existsSync(filePath)) {
+                const data = fs.readFileSync(filePath, "utf8");
                 const leads = JSON.parse(data);
-                console.log(`📥 Leads carregados: ${leads.length} registros`);
+                console.log(`📥 Leads carregados para ${apiKey}: ${leads.length} registros`);
                 return leads;
             }
         } catch (error) {
-            console.error("❌ Erro ao carregar leads:", error);
+            console.error(`❌ Erro ao carregar leads para ${apiKey}:`, error);
         }
-        console.log("📝 Inicializando novo arquivo de leads");
+        console.log(`📝 Inicializando novo arquivo de leads para ${apiKey}`);
         return [];
     }
 
-    saveLeads() {
+    saveLeads(apiKey, leads) {
         try {
-            fs.writeFileSync(this.leadsFilePath, JSON.stringify(this.leads, null, 2));
-            console.log(`💾 Leads salvos: ${this.leads.length} registros`);
+            const filePath = this.getLeadsFilePath(apiKey);
+            fs.writeFileSync(filePath, JSON.stringify(leads, null, 2));
+            console.log(`💾 Leads salvos para ${apiKey}: ${leads.length} registros`);
             return true;
         } catch (error) {
-            console.error("❌ Erro ao salvar leads:", error);
+            console.error(`❌ Erro ao salvar leads para ${apiKey}:`, error);
             return false;
         }
     }
 
-    addLead(leadData) {
+    addLead(apiKey, leadData) {
+        const leads = this.loadLeads(apiKey);
+        
         const lead = {
             id: crypto.randomBytes(8).toString("hex"),
             timestamp: new Date().toISOString(),
@@ -115,14 +119,16 @@ class LeadCaptureSystem {
             status: "ativo"
         };
 
-        this.leads.push(lead);
-        this.saveLeads();
-        console.log(`🎯 NOVO LEAD: ${lead.nome} (${lead.email})`);
+        leads.push(lead);
+        this.saveLeads(apiKey, leads);
+        console.log(`🎯 NOVO LEAD para ${apiKey}: ${lead.nome} (${lead.email})`);
         return lead;
     }
 
-    updateLeadConversation(leadId, message, isUser = true) {
-        const lead = this.leads.find(l => l.id === leadId);
+    updateLeadConversation(apiKey, leadId, message, isUser = true) {
+        const leads = this.loadLeads(apiKey);
+        const lead = leads.find(l => l.id === leadId);
+        
         if (lead) {
             // 🎯 CORREÇÃO: Remover caracteres especiais como <s> [OUT]
             const cleanMessage = this.cleanMessage(message);
@@ -133,7 +139,7 @@ class LeadCaptureSystem {
                 isUser
             });
             lead.lastInteraction = new Date().toISOString();
-            this.saveLeads();
+            this.saveLeads(apiKey, leads);
         }
     }
 
@@ -148,29 +154,224 @@ class LeadCaptureSystem {
             .trim();
     }
 
-    updateLeadJourneyStage(leadId, stage) {
-        const lead = this.leads.find(l => l.id === leadId);
+    updateLeadJourneyStage(apiKey, leadId, stage) {
+        const leads = this.loadLeads(apiKey);
+        const lead = leads.find(l => l.id === leadId);
+        
         if (lead && ["descoberta", "negociacao", "fidelizacao"].includes(stage)) {
             lead.journeyStage = stage;
-            this.saveLeads();
+            this.saveLeads(apiKey, leads);
         }
     }
 
-    getLeads() {
-        return this.leads.sort((a, b) => new Date(b.lastInteraction) - new Date(a.lastInteraction));
+    getLeads(apiKey) {
+        const leads = this.loadLeads(apiKey);
+        return leads.sort((a, b) => new Date(b.lastInteraction) - new Date(a.lastInteraction));
     }
 
-    getLeadById(leadId) {
-        return this.leads.find(l => l.id === leadId);
+    getLeadById(apiKey, leadId) {
+        const leads = this.loadLeads(apiKey);
+        return leads.find(l => l.id === leadId);
     }
 
-    findLeadByEmail(email) {
-        return this.leads.find(l => l.email === email);
+    findLeadByEmail(apiKey, email) {
+        const leads = this.loadLeads(apiKey);
+        return leads.find(l => l.email === email);
     }
 }
 
 // Inicializar sistema de leads
 const leadSystem = new LeadCaptureSystem();
+
+// ===== SISTEMA DE BACKUP AUTOMÁTICO DE LEADS =====
+class LeadBackupSystem {
+    constructor(leadSystem) {
+        this.leadSystem = leadSystem;
+        const dataDir = path.join(__dirname, "data");
+        this.backupDir = path.join(dataDir, "backups");
+        this.ensureBackupDirectory();
+        this.maxBackups = 7; // Manter últimos 7 backups por cliente
+        this.backupInterval = 24 * 60 * 60 * 1000; // 24 horas
+        console.log(`🔐 Sistema de Backup Multi-Tenant Inicializado`);
+        console.log(`📁 Diretório de backups: ${this.backupDir}`);
+        
+        // Agendar backup diário (será executado para cada cliente quando acessar)
+        this.scheduleAutomaticBackups();
+        
+        // Backup antes de shutdown
+        this.setupShutdownHook();
+    }
+
+    ensureBackupDirectory(apiKey = null) {
+        try {
+            if (!fs.existsSync(this.backupDir)) {
+                fs.mkdirSync(this.backupDir, { recursive: true });
+                console.log(`📁 Diretório de backups criado: ${this.backupDir}`);
+            }
+            
+            // Criar subdiretório para cada cliente
+            if (apiKey) {
+                const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+                const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+                if (!fs.existsSync(clientBackupDir)) {
+                    fs.mkdirSync(clientBackupDir, { recursive: true });
+                    console.log(`📁 Diretório de backups criado para ${apiKey}`);
+                }
+            }
+        } catch (error) {
+            console.error("❌ Erro ao criar diretório de backups:", error);
+        }
+    }
+
+    createBackup(apiKey, type = "manual") {
+        try {
+            this.ensureBackupDirectory(apiKey);
+            
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const filename = `leads-backup-${type}-${timestamp}.json`;
+            const backupPath = path.join(clientBackupDir, filename);
+            
+            const leads = this.leadSystem.loadLeads(apiKey);
+            const backupData = {
+                timestamp: new Date().toISOString(),
+                type: type,
+                apiKey: apiKey,
+                leadsCount: leads.length,
+                leads: leads
+            };
+            
+            fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
+            console.log(`✅ Backup criado para ${apiKey}: ${filename} (${leads.length} leads)`);
+            
+            // Limpar backups antigos deste cliente
+            this.cleanOldBackups(apiKey);
+            
+            return { success: true, filename, path: backupPath, leadsCount: leads.length };
+        } catch (error) {
+            console.error(`❌ Erro ao criar backup para ${apiKey}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    cleanOldBackups(apiKey) {
+        try {
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            
+            if (!fs.existsSync(clientBackupDir)) return;
+            
+            const files = fs.readdirSync(clientBackupDir)
+                .filter(f => f.startsWith("leads-backup-"))
+                .map(f => ({
+                    name: f,
+                    path: path.join(clientBackupDir, f),
+                    time: fs.statSync(path.join(clientBackupDir, f)).mtime.getTime()
+                }))
+                .sort((a, b) => b.time - a.time);
+            
+            // Manter apenas os últimos maxBackups
+            if (files.length > this.maxBackups) {
+                const filesToDelete = files.slice(this.maxBackups);
+                filesToDelete.forEach(file => {
+                    fs.unlinkSync(file.path);
+                    console.log(`🗑️ Backup antigo removido para ${apiKey}: ${file.name}`);
+                });
+            }
+        } catch (error) {
+            console.error(`❌ Erro ao limpar backups antigos para ${apiKey}:`, error);
+        }
+    }
+
+    listBackups(apiKey) {
+        try {
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            
+            if (!fs.existsSync(clientBackupDir)) {
+                return [];
+            }
+            
+            const files = fs.readdirSync(clientBackupDir)
+                .filter(f => f.startsWith("leads-backup-"))
+                .map(f => {
+                    const filePath = path.join(clientBackupDir, f);
+                    const stats = fs.statSync(filePath);
+                    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+                    return {
+                        filename: f,
+                        timestamp: data.timestamp,
+                        type: data.type,
+                        leadsCount: data.leadsCount,
+                        size: stats.size,
+                        created: stats.mtime
+                    };
+                })
+                .sort((a, b) => new Date(b.created) - new Date(a.created));
+            
+            return files;
+        } catch (error) {
+            console.error(`❌ Erro ao listar backups para ${apiKey}:`, error);
+            return [];
+        }
+    }
+
+    restoreBackup(apiKey, filename) {
+        try {
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            const backupPath = path.join(clientBackupDir, filename);
+            
+            if (!fs.existsSync(backupPath)) {
+                return { success: false, error: "Backup não encontrado" };
+            }
+            
+            const backupData = JSON.parse(fs.readFileSync(backupPath, "utf8"));
+            
+            // Criar backup do estado atual antes de restaurar
+            this.createBackup(apiKey, "pre-restore");
+            
+            // Restaurar leads
+            this.leadSystem.saveLeads(apiKey, backupData.leads);
+            
+            console.log(`✅ Backup restaurado para ${apiKey}: ${filename} (${backupData.leadsCount} leads)`);
+            
+            return { 
+                success: true, 
+                leadsCount: backupData.leadsCount,
+                timestamp: backupData.timestamp
+            };
+        } catch (error) {
+            console.error("❌ Erro ao restaurar backup:", error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    scheduleAutomaticBackups() {
+        setInterval(() => {
+            console.log("⏰ Executando backup automático diário...");
+            this.createBackup("daily");
+        }, this.backupInterval);
+        
+        console.log(`⏰ Backup automático agendado (a cada 24 horas)`);
+    }
+
+    setupShutdownHook() {
+        const shutdown = () => {
+            console.log("🛑 Servidor encerrando - Criando backup final...");
+            this.createBackup("shutdown");
+            process.exit(0);
+        };
+        
+        process.on("SIGTERM", shutdown);
+        process.on("SIGINT", shutdown);
+    }
+}
+
+// Inicializar sistema de backup
+const backupSystem = new LeadBackupSystem(leadSystem);
 
 // ===== SISTEMA DE ANÁLISE DE JORNADA DO CLIENTE =====
 class JourneyAnalyzer {
@@ -1257,8 +1458,9 @@ app.get("/excluir-dados", (req, res) => {
 
 // ===== ROTAS DE ADMINISTRAÇÃO DE LEADS =====
 app.get("/admin/leads", requireApiKey, (req, res) => {
-    const leads = leadSystem.getLeads();
-    console.log(`📊 Retornando ${leads.length} leads para admin`);
+    const apiKey = req.session.validatedApiKey;
+    const leads = leadSystem.getLeads(apiKey);
+    console.log(`📊 Retornando ${leads.length} leads para ${apiKey}`);
     res.json({
         success: true,
         leads: leads,
@@ -1267,12 +1469,45 @@ app.get("/admin/leads", requireApiKey, (req, res) => {
 });
 
 app.get("/admin/leads/:id", requireApiKey, (req, res) => {
-    const lead = leadSystem.getLeadById(req.params.id);
+    const apiKey = req.session.validatedApiKey;
+    const lead = leadSystem.getLeadById(apiKey, req.params.id);
     if (lead) {
         res.json({ success: true, lead });
     } else {
         res.status(404).json({ success: false, error: "Lead não encontrado" });
     }
+});
+
+// ===== ROTAS DE BACKUP DE LEADS =====
+app.post("/admin/leads/backup/create", requireApiKey, (req, res) => {
+    const apiKey = req.session.validatedApiKey;
+    const result = backupSystem.createBackup(apiKey, "manual");
+    res.json(result);
+});
+
+app.get("/admin/leads/backup/list", requireApiKey, (req, res) => {
+    const apiKey = req.session.validatedApiKey;
+    const backups = backupSystem.listBackups(apiKey);
+    res.json({
+        success: true,
+        backups: backups,
+        total: backups.length
+    });
+});
+
+app.post("/admin/leads/backup/restore", requireApiKey, (req, res) => {
+    const apiKey = req.session.validatedApiKey;
+    const { filename } = req.body;
+    
+    if (!filename) {
+        return res.status(400).json({
+            success: false,
+            error: "Nome do arquivo de backup é obrigatório"
+        });
+    }
+    
+    const result = backupSystem.restoreBackup(apiKey, filename);
+    res.json(result);
 });
 
 // ROTA CHAT.HTML
@@ -1281,7 +1516,8 @@ app.get("/chat.html", (req, res) => {
     const url = req.query.url || "";
     const instructions = req.query.instructions || "";
     
-    const chatbotHTML = generateChatbotHTML({ robotName, url, instructions });
+    const apiKey = req.query.apiKey || ""; // Adicionar apiKey da query parameter
+    const chatbotHTML = generateChatbotHTML({ robotName, url, instructions, apiKey });
     res.send(chatbotHTML);
 });
 
@@ -1817,7 +2053,7 @@ function shouldActivateSalesMode(instructions) {
 }
 
 // ===== FUNÇÃO APRIMORADA DE RESPOSTA DA IA =====
-async function generateAIResponse(userMessage, pageData = {}, conversationHistory = [], instructions = "", leadId = null) {
+async function generateAIResponse(userMessage, pageData = {}, conversationHistory = [], instructions = "", leadId = null, apiKey = null) {
     const startTime = Date.now();
     try {
         if (!userMessage || !String(userMessage).trim()) {
@@ -1836,8 +2072,8 @@ async function generateAIResponse(userMessage, pageData = {}, conversationHistor
         const excitementWord = journeyAnalyzer.getRandomSynonym('empolgação');
 
         // Atualizar estágio do lead se existir
-        if (leadId) {
-            leadSystem.updateLeadJourneyStage(leadId, journeyStage);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadJourneyStage(apiKey, leadId, journeyStage);
         }
 
         // 🎯 DETECÇÃO APRIMORADA DE BÔNUS
@@ -2064,7 +2300,7 @@ app.get("/health", (req, res) => {
 // ===== ENDPOINT: Captura de Lead =====
 app.post("/api/capture-lead", async (req, res) => {
     try {
-        const { nome, email, telefone, url_origem, robotName } = req.body || {};
+        const { nome, email, telefone, url_origem, robotName, apiKey } = req.body || {};
         
         if (!email) {
             return res.status(400).json({ 
@@ -2073,8 +2309,15 @@ app.post("/api/capture-lead", async (req, res) => {
             });
         }
 
-        // Verificar se lead já existe
-        const existingLead = leadSystem.findLeadByEmail(email);
+        if (!apiKey) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "API Key é obrigatória" 
+            });
+        }
+
+        // Verificar se lead já existe para este cliente
+        const existingLead = leadSystem.findLeadByEmail(apiKey, email);
         if (existingLead) {
             return res.json({ 
                 success: true, 
@@ -2083,8 +2326,8 @@ app.post("/api/capture-lead", async (req, res) => {
             });
         }
 
-        // Criar novo lead
-        const newLead = leadSystem.addLead({
+        // Criar novo lead para este cliente
+        const newLead = leadSystem.addLead(apiKey, {
             nome: nome || "Não informado",
             email,
             telefone: telefone || "Não informado",
@@ -2094,7 +2337,7 @@ app.post("/api/capture-lead", async (req, res) => {
 
         analytics.leadsCaptured++;
         
-        console.log(`🎯 NOVO LEAD CAPTURADO: ${newLead.nome} (${newLead.email})`);
+        console.log(`🎯 NOVO LEAD CAPTURADO para ${apiKey}: ${newLead.nome} (${newLead.email})`);
 
         res.json({ 
             success: true, 
@@ -2115,7 +2358,7 @@ app.post("/api/capture-lead", async (req, res) => {
 app.post("/api/chat-universal", async (req, res) => {
     analytics.chatRequests++;
     try {
-        const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
+        const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
         
         if (!message) {
             return res.status(400).json({ 
@@ -2135,15 +2378,15 @@ app.post("/api/chat-universal", async (req, res) => {
         }
 
         // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, message, true);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, message, true);
         }
 
-        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
+        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId, apiKey);
 
         // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, aiResponse, false);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, aiResponse, false);
         }
 
         let finalResponse = aiResponse;
@@ -2175,7 +2418,7 @@ app.post("/api/chat-universal", async (req, res) => {
 app.post("/api/process-chat-inteligente", async (req, res) => {
     analytics.chatRequests++;
     try {
-        const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
+        const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
         
         if (!message) {
             return res.status(400).json({ 
@@ -2187,7 +2430,8 @@ app.post("/api/process-chat-inteligente", async (req, res) => {
         console.log('🧠 [CHAT-INTELIGENTE] Processando mensagem:', { 
             messageLength: message.length,
             url: url || 'none',
-            leadId: leadId || 'none'
+            leadId: leadId || 'none',
+            apiKey: apiKey || 'none'
         });
 
         if (conversationId) {
@@ -2207,9 +2451,9 @@ app.post("/api/process-chat-inteligente", async (req, res) => {
         const journeyStage = journeyAnalyzer.analyzeJourneyStage(message);
         
         // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, message, true);
-            leadSystem.updateLeadJourneyStage(leadId, journeyStage);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, message, true);
+            leadSystem.updateLeadJourneyStage(apiKey, leadId, journeyStage);
         }
 
         let finalResponse = "";
@@ -2225,13 +2469,13 @@ app.post("/api/process-chat-inteligente", async (req, res) => {
             console.log(`🎯 [CHAT-INTELIGENTE] Resposta contextual gerada: ${finalResponse.length} caracteres`);
         } else {
             // 🎯 USAR SISTEMA ORIGINAL SE NENHUMA INTENÇÃO ESPECÍFICA
-            finalResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
+            finalResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId, apiKey);
             console.log(`🤖 [CHAT-INTELIGENTE] Resposta IA gerada: ${finalResponse.length} caracteres`);
         }
 
         // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, finalResponse, false);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, finalResponse, false);
         }
 
         return res.json({
@@ -2376,10 +2620,10 @@ app.post("/api/extract", async (req, res) => {
 // Widget JS atualizado
 app.get("/public/widget.js", (req, res) => {
     res.set("Content-Type", "application/javascript");
-    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true\n        },\n        \n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\n                    body: JSON.stringify({\n                        nome: name || 'Não informado',\n                        email: email,\n                        telefone: phone || 'Não informado',\n                        url_origem: window.location.href,\n                        robotName: this.config.robotName\n                    })\n                });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: this.config.salesUrl,\n                        instructions: this.config.instructions,\n                        robotName: this.config.robotName,\n                        conversationId: this.config.conversationId,\n                        leadId: this.leadId\n                    })\n                });\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
+    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true,\n            apiKey: ''\n        },\n        \n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\                    headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey\n                    },\n                      headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey // Adicionado API Key ao cabeçalho\n                    },\n                    body: JSON.stringify({\n                        nome: name || \'Não informado\',\n                        email: email,\n                        telefone: phone || \'Não informado\',\n                        url_origem: window.location.href,\n                        robotName: config.robotName\n                    }),\n                    headers: {\n                        \"Content-Type\": \"application/json\",\n                        \"X-API-Key\": config.apiKey\n                    } })               });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\n                    headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey\n                    },\n                    body:                     headers: {\n                        \'Content-Type\': \'application/json\',\n                        \'X-API-Key\': this.config.apiKey // Adicionado API Key ao cabeçalho\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: config.url,\n                        instructions: config.instructions,\n                        robotName: config.robotName,\n                        conversationId: config.conversationId,\n                        leadId: leadId\n                    })  })\n                });\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
 });
 
-function generateChatbotHTML({ robotName, url, instructions }) {
+function generateChatbotHTML({ robotName, url, instructions, apiKey }) {
     const escapedRobotName = String(robotName).replace(/"/g, "&quot;");
     const escapedUrl = String(url).replace(/"/g, "&quot;");
     const escapedInstructions = String(instructions).replace(/"/g, "&quot;");
@@ -2477,7 +2721,8 @@ const config = {
     robotName: "${escapedRobotName}",
     url: "${escapedUrl}",
     instructions: "${escapedInstructions}",
-    conversationId: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+    conversationId: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+    apiKey: apiKey
 };
 
 let isTyping = false;
@@ -2498,7 +2743,8 @@ startChatBtn.addEventListener('click', async function() {
         const response = await fetch('/api/capture-lead', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-API-Key': config.apiKey // Adicionado API Key ao cabeçalho
             },
             body: JSON.stringify({
                 nome: name || 'Não informado',
@@ -2557,7 +2803,9 @@ async function sendMessage() {
         const response = await fetch('/api/chat-universal', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Cont            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': config.apiKey
             },
             body: JSON.stringify({
                 message: message,
@@ -2757,15 +3005,18 @@ startChatBtn.addEventListener('click', async function() {
     }
 
     try {
-        const response = await fetch('/api/capture-lead', {
+        const response = await fetch("/api/capture-lead", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': config.apiKey
+            },
             body: JSON.stringify({
                 nome: name || 'Não informado',
                 email: email,
                 telefone: phone || 'Não informado',
                 url_origem: window.location.href,
-                robotName: robotName
+                robotName: config.robotName
             })
         });
 
