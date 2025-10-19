@@ -23,7 +23,6 @@
             robotName: 'Assistente IA',
             salesUrl: '',
             instructions: '',
-            apiKey: '', // Nova propriedade para a API Key
             apiBase: window.location.origin,
             showBadge: true,
             autoOpen: false,
@@ -54,12 +53,6 @@
             try {
                 // Merge user configuration
                 this.config = this.mergeConfig(this.config, userConfig || {});
-
-                // Validate API Key presence
-                if (!this.config.apiKey) {
-                    console.error('LinkMagico Widget: API Key is required for initialization.');
-                    return;
-                }
 
                 // Generate conversation ID
                 this.conversationId = 'widget_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -997,10 +990,9 @@
 
             fetch(this.config.apiBase + '/chat-universal', {
                 method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + this.config.apiKey
-                    },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(payload)
             })
             .then(function(response) {

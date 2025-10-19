@@ -314,11 +314,8 @@ const DatabaseHelpers = {
             ? `SELECT * FROM chatbots WHERE api_key = $1`
             : `SELECT * FROM chatbots WHERE api_key = ?`;
 
-               const parsedDays = parseInt(days, 10);
-        if (isNaN(parsedDays) || parsedDays <= 0) {
-            throw new Error('Invalid days parameter');
-        }
-        const result = await db.query(query, [chatbot_id, parsedDays]);      const chatbot = result.rows[0];
+        const result = await db.query(query, [apiKey]);
+        const chatbot = result.rows[0];
 
         if (chatbot && !USE_POSTGRES) {
             chatbot.extracted_data = JSON.parse(chatbot.extracted_data || '{}');
@@ -461,17 +458,13 @@ const DatabaseHelpers = {
     async getChatbotAnalytics(chatbot_id, days = 30) {
         const query = USE_POSTGRES
             ? `SELECT * FROM analytics 
-               WHERE chatbot_id = $1 AND date >= CURRENT_DATE - ($2 * INTERVAL '1 day')
+               WHERE chatbot_id = $1 AND date >= CURRENT_DATE - INTERVAL '${days} days'
                ORDER BY date DESC`
             : `SELECT * FROM analytics 
-               WHERE chatbot_id = ? AND date >= date('now', '-' || ? || ' days')
+               WHERE chatbot_id = ? AND date >= date('now', '-${days} days')
                ORDER BY date DESC`;
 
-        const parsedDays = parseInt(days, 10);
-        if (isNaN(parsedDays) || parsedDays <= 0) {
-            throw new Error('Invalid days parameter');
-        }
-        const result = await db.query(query, USE_POSTGRES ? [chatbot_id, parsedDays] : [chatbot_id, parsedDays]);
+        const result = await db.query(query, [chatbot_id]);
         return result.rows;
     }
 };
