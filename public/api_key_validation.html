@@ -320,8 +320,8 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        localStorage.setItem('linkmagico_api_key', apiKey);
-                        window.location.href = '/chat.html';
+                        // Sucesso - redirecionar para a aplicação principal
+                        window.location.href = '/app';
                     } else {
                         // Erro de validação
                         showError(data.error || 'API Key inválida. Verifique e tente novamente.');

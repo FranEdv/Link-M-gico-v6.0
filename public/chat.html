@@ -763,8 +763,7 @@
     <script>
         let pageData = null;
         let robotName = 'Assistente IA';
-       const conversationId = `chat_${Date.now()}`;
-const apiKey = localStorage.getItem("linkmagico_api_key");
+        let conversationId = 'chat_' + Date.now();
         let messageCount = 0;
         const customInstructions = new URLSearchParams(window.location.search).get('instructions') || '';
 

@@ -206,7 +206,7 @@ class StructuredLeadsManager {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `;
 
-            await DatabaseHelpers.run(query, [
+            await db.query(query, [
                 id,
                 chatbotId,
                 metadata.sessionId || null,
@@ -284,7 +284,7 @@ class StructuredLeadsManager {
                 params.push(filters.limit);
             }
 
-            const leads = await DatabaseHelpers.all(query, params);
+            const leads = await db.query(query, params);
 
             return {
                 success: true,
@@ -397,7 +397,7 @@ class StructuredLeadsManager {
                 WHERE id = ?
             `;
 
-            await DatabaseHelpers.run(query, [newStatus, leadId]);
+            await db.query(query, [newStatus, leadId]);
 
             console.log(`✅ Status do lead ${leadId} atualizado para ${newStatus}`);
 
@@ -429,7 +429,7 @@ class StructuredLeadsManager {
                 WHERE chatbot_id = ?
             `;
 
-            const stats = await DatabaseHelpers.get(query, [chatbotId]);
+            const stats = await db.query(query, [chatbotId]);
 
             return {
                 success: true,
@@ -464,7 +464,7 @@ class StructuredLeadsManager {
                 WHERE id = ?
             `;
 
-            await DatabaseHelpers.run(query, [
+            await db.query(query, [
                 `[${new Date().toLocaleString('pt-BR')}] ${note}`,
                 leadId
             ]);

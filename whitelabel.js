@@ -75,7 +75,7 @@ class WhitelabelManager {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `;
 
-            await DatabaseHelpers.run(query, [
+            await db.query(query, [
                 id,
                 chatbotId,
                 planType,
@@ -116,7 +116,7 @@ class WhitelabelManager {
                 LIMIT 1
             `;
 
-            const settings = await DatabaseHelpers.get(query, [chatbotId]);
+            const settings = await db.query(query, [chatbotId]);
 
             if (!settings) {
                 return {
@@ -228,7 +228,7 @@ class WhitelabelManager {
     async removeSettings(chatbotId) {
         try {
             const query = `DELETE FROM whitelabel_settings WHERE chatbot_id = ?`;
-            await DatabaseHelpers.run(query, [chatbotId]);
+            await db.query(query, [chatbotId]);
 
             console.log(`✅ Whitelabel removido para chatbot ${chatbotId}`);
             return {
@@ -253,7 +253,7 @@ class WhitelabelManager {
                 ORDER BY created_at DESC
             `;
 
-            const settings = await DatabaseHelpers.all(query);
+            const settings = await db.query(query);
 
             return {
                 success: true,
@@ -323,7 +323,7 @@ class WhitelabelManager {
                 FROM whitelabel_settings
             `;
 
-            const stats = await DatabaseHelpers.get(query);
+            const stats = await db.query(query);
 
             return {
                 success: true,
