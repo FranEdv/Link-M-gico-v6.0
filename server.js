@@ -980,27 +980,22 @@ class SuperInteligenciaEmocional {
         }
 
         // Adaptar tom baseado na personalidade
-        switch (personalidade.tom) {
-            case "acolhedor e compreensivo":
-                respostaBase += "Vamos resolver isso juntos, passo a passo. ";
-                break;
-            case "entusiasmado e energético":
-                respostaBase += "Você está no caminho certo! ";
-                break;
-            case "detalhista e preciso":
-                respostaBase += "Deixe-me explicar detalhadamente. ";
-                break;
-            default:
-                respostaBase += "Aqui estão as informações que você precis
+switch (personalidade.tom) {
+    case "acolhedor e compreensivo":
+        respostaBase += "Vamos resolver isso juntos, passo a passo. ";
+        break;
+    case "entusiasmado e energético":
+        respostaBase += "Você está no caminho certo! ";
+        break;
+    case "detalhista e preciso":
+        respostaBase += "Deixe-me explicar detalhadamente. ";
+        break;
+    default:
+        respostaBase += "Aqui estão as informações que você precisa: ";
+}
 
-
-                break;
-            default:
-                respostaBase += "Aqui estão as informações que você precisa: ";
-        }
-
-        return respostaBase;
-    }
+return respostaBase;
+}
 
     // ===== SISTEMA DE AGENDAMENTO INTELIGENTE =====
     detectarAgendamento(mensagem) {
