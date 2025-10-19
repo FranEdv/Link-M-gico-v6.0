@@ -2290,7 +2290,7 @@ app.post("/api/capture-lead", async (req, res) => {
 });
 
 // ===== ENDPOINT CHAT COM CAPTURA DE LEAD =====
-app.post("/api/chat-universal", async (req, res) {
+app.post("/api/chat-universal", async (req, res) => {
     analytics.chatRequests++;
     try {
         const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
