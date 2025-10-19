@@ -39,7 +39,7 @@ class WhitelabelManager {
                 )
             `;
 
-            await DatabaseHelpers.run(query);
+            await db.query(query);
             console.log('✅ Tabela whitelabel_settings criada/verificada');
             return true;
         } catch (error) {

@@ -75,7 +75,7 @@ class StructuredLeadsManager {
                 )
             `;
 
-            await DatabaseHelpers.run(query);
+            await db.query(query);
             console.log('✅ Tabela structured_leads criada/verificada');
             return true;
         } catch (error) {

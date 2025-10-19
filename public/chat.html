@@ -763,7 +763,8 @@
     <script>
         let pageData = null;
         let robotName = 'Assistente IA';
-        let conversationId = 'chat_' + Date.now();
+       const conversationId = `chat_${Date.now()}`;
+const apiKey = localStorage.getItem("linkmagico_api_key");
         let messageCount = 0;
         const customInstructions = new URLSearchParams(window.location.search).get('instructions') || '';
 
@@ -771,6 +772,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const pageUrl = urlParams.get('url');
         const robotNameParam = urlParams.get('name');
+        const apiKey = urlParams.get('apiKey') || '';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -1046,7 +1048,8 @@
                         pageData: pageData,
                         robotName: robotName,
                         conversationId: conversationId,
-                        instructions: customInstructions
+                        instructions: customInstructions,
+                        apiKey: apiKey
                     })
                 });
                 

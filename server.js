@@ -3322,3 +3322,4 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
     });
 })();
+
