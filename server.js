@@ -21,6 +21,8 @@ const { whitelabelManager } = require('./whitelabel');
 const { structuredLeadsManager } = require('./structured-leads');
 console.log('✅ Módulos V3.0 carregados');
 
+
+
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
@@ -45,71 +47,69 @@ try {
 
 const app = express();
 
+
 // Declarando conversationHistories no escopo global ou adequado
 const conversationHistories = new Map();
 
 // ===== SISTEMA DE ARMAZENAMENTO DE LEADS PERSISTENTE =====
-function getTenantLeadsFilePath(apiKey) {
-    const dataDir = path.join(__dirname, "data");
-    const tenantDir = path.join(dataDir, "tenants");
-    if (!fs.existsSync(tenantDir)) {
-        fs.mkdirSync(tenantDir, { recursive: true });
-    }
-    return path.join(tenantDir, `leads-${apiKey}.json`);
-}
-
 class LeadCaptureSystem {
-    constructor(apiKey) {
-        this.apiKey = apiKey;
-        this.leadsFilePath = getTenantLeadsFilePath(this.apiKey);
+    constructor() {
+        // Usar diretório ./data/leads para persistência multi-tenant
+        const dataDir = path.join(__dirname, "data");
+        this.leadsDir = path.join(dataDir, "leads");
         this.ensureDataDirectory();
-        this.leads = this.loadLeads();
-        console.log(`📊 Sistema de Leads Inicializado: ${this.leads.length} leads carregados`);
-        console.log(`💾 Arquivo de leads: ${this.leadsFilePath}`);
+        console.log(`📊 Sistema de Leads Multi-Tenant Inicializado`);
+        console.log(`📁 Diretório de leads: ${this.leadsDir}`);
     }
 
     ensureDataDirectory() {
         try {
-            const dir = path.dirname(this.leadsFilePath);
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-                console.log(`📁 Diretório criado: ${dir}`);
+            if (!fs.existsSync(this.leadsDir)) {
+                fs.mkdirSync(this.leadsDir, { recursive: true });
+                console.log(`📁 Diretório criado: ${this.leadsDir}`);
             }
         } catch (error) {
             console.error("❌ Erro ao criar diretório:", error);
-            // Fallback para diretório atual se data/ não funcionar
-            this.leadsFilePath = path.join(__dirname, "leads.json");
-            console.log(`🔄 Usando fallback: ${this.leadsFilePath}`);
         }
     }
 
-    loadLeads() {
+    getLeadsFilePath(apiKey) {
+        // Cada API Key tem seu próprio arquivo de leads
+        const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+        return path.join(this.leadsDir, `${sanitizedKey}.json`);
+    }
+
+    loadLeads(apiKey) {
         try {
-            if (fs.existsSync(this.leadsFilePath)) {
-                const data = fs.readFileSync(this.leadsFilePath, "utf8");
+            const filePath = this.getLeadsFilePath(apiKey);
+            if (fs.existsSync(filePath)) {
+                const data = fs.readFileSync(filePath, "utf8");
                 const leads = JSON.parse(data);
-                console.log(`📥 Leads carregados: ${leads.length} registros`);
+                console.log(`📥 Leads carregados para ${apiKey}: ${leads.length} registros`);
                 return leads;
             }
         } catch (error) {
-            console.error("❌ Erro ao carregar leads:", error);
+            console.error(`❌ Erro ao carregar leads para ${apiKey}:`, error);
         }
-        console.log("📝 Inicializando novo arquivo de leads");
+        console.log(`📝 Inicializando novo arquivo de leads para ${apiKey}`);
         return [];
     }
 
-    saveLeads() {
+    saveLeads(apiKey, leads) {
         try {
-            fs.writeFileSync(this.leadsFilePath, JSON.stringify(this.leads, null, 2));
-            console.log(`💾 Leads salvos: ${this.leads.length} registros`);
+            const filePath = this.getLeadsFilePath(apiKey);
+            fs.writeFileSync(filePath, JSON.stringify(leads, null, 2));
+            console.log(`💾 Leads salvos para ${apiKey}: ${leads.length} registros`);
             return true;
         } catch (error) {
-            console.error("❌ Erro ao salvar leads:", error);
+            console.error(`❌ Erro ao salvar leads para ${apiKey}:`, error);
             return false;
         }
     }
 
-    addLead(leadData) {
+    addLead(apiKey, leadData) {
+        const leads = this.loadLeads(apiKey);
+        
         const lead = {
             id: crypto.randomBytes(8).toString("hex"),
             timestamp: new Date().toISOString(),
@@ -120,14 +120,16 @@ class LeadCaptureSystem {
             status: "ativo"
         };
 
-        this.leads.push(lead);
-        this.saveLeads();
-        console.log(`🎯 NOVO LEAD: ${lead.nome} (${lead.email})`);
+        leads.push(lead);
+        this.saveLeads(apiKey, leads);
+        console.log(`🎯 NOVO LEAD para ${apiKey}: ${lead.nome} (${lead.email})`);
         return lead;
     }
 
-    updateLeadConversation(leadId, message, isUser = true) {
-        const lead = this.leads.find(l => l.id === leadId);
+    updateLeadConversation(apiKey, leadId, message, isUser = true) {
+        const leads = this.loadLeads(apiKey);
+        const lead = leads.find(l => l.id === leadId);
+        
         if (lead) {
             // 🎯 CORREÇÃO: Remover caracteres especiais como <s> [OUT]
             const cleanMessage = this.cleanMessage(message);
@@ -138,7 +140,7 @@ class LeadCaptureSystem {
                 isUser
             });
             lead.lastInteraction = new Date().toISOString();
-            this.saveLeads();
+            this.saveLeads(apiKey, leads);
         }
     }
 
@@ -153,110 +155,121 @@ class LeadCaptureSystem {
             .trim();
     }
 
-    updateLeadJourneyStage(leadId, stage) {
-        const lead = this.leads.find(l => l.id === leadId);
+    updateLeadJourneyStage(apiKey, leadId, stage) {
+        const leads = this.loadLeads(apiKey);
+        const lead = leads.find(l => l.id === leadId);
+        
         if (lead && ["descoberta", "negociacao", "fidelizacao"].includes(stage)) {
             lead.journeyStage = stage;
-            this.saveLeads();
+            this.saveLeads(apiKey, leads);
         }
     }
 
-    getLeads() {
-        return this.leads.sort((a, b) => new Date(b.lastInteraction) - new Date(a.lastInteraction));
+    getLeads(apiKey) {
+        const leads = this.loadLeads(apiKey);
+        return leads.sort((a, b) => new Date(b.lastInteraction) - new Date(a.lastInteraction));
     }
 
-    getLeadById(leadId) {
-        return this.leads.find(l => l.id === leadId);
+    getLeadById(apiKey, leadId) {
+        const leads = this.loadLeads(apiKey);
+        return leads.find(l => l.id === leadId);
     }
 
-    findLeadByEmail(email) {
-        return this.leads.find(l => l.email === email);
+    findLeadByEmail(apiKey, email) {
+        const leads = this.loadLeads(apiKey);
+        return leads.find(l => l.email === email);
     }
 }
 
-// Funções para obter instâncias de sistema de leads e backup por tenant
-function getLeadSystem(apiKey) {
-    return new LeadCaptureSystem(apiKey);
-}
-
-function getBackupSystem(leadSystem, apiKey) {
-    return new LeadBackupSystem(leadSystem, apiKey);
-}
+// Inicializar sistema de leads
+const leadSystem = new LeadCaptureSystem();
 
 // ===== SISTEMA DE BACKUP AUTOMÁTICO DE LEADS =====
-
-function getTenantBackupDirPath(apiKey) {
-    const dataDir = path.join(__dirname, "data");
-    const tenantDir = path.join(dataDir, "tenants");
-    if (!fs.existsSync(tenantDir)) {
-        fs.mkdirSync(tenantDir, { recursive: true });
-    }
-    return path.join(tenantDir, apiKey, "backups");
-}
-
 class LeadBackupSystem {
-    constructor(leadSystem, apiKey) {
+    constructor(leadSystem) {
         this.leadSystem = leadSystem;
-        this.apiKey = apiKey;
-        this.backupDir = getTenantBackupDirPath(this.apiKey);
+        const dataDir = path.join(__dirname, "data");
+        this.backupDir = path.join(dataDir, "backups");
         this.ensureBackupDirectory();
-        this.maxBackups = 7; // Manter últimos 7 dias
+        this.maxBackups = 7; // Manter últimos 7 backups por cliente
         this.backupInterval = 24 * 60 * 60 * 1000; // 24 horas
-        console.log(`🔐 Sistema de Backup Inicializado`);
+        console.log(`🔐 Sistema de Backup Multi-Tenant Inicializado`);
         console.log(`📁 Diretório de backups: ${this.backupDir}`);
         
-        // Fazer backup inicial
-        this.createBackup("startup");
-        
-        // Agendar backup diário
+        // Agendar backup diário (será executado para cada cliente quando acessar)
         this.scheduleAutomaticBackups();
+        
+        // Backup antes de shutdown
+        this.setupShutdownHook();
     }
 
-    ensureBackupDirectory() {
+    ensureBackupDirectory(apiKey = null) {
         try {
             if (!fs.existsSync(this.backupDir)) {
                 fs.mkdirSync(this.backupDir, { recursive: true });
                 console.log(`📁 Diretório de backups criado: ${this.backupDir}`);
+            }
+            
+            // Criar subdiretório para cada cliente
+            if (apiKey) {
+                const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+                const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+                if (!fs.existsSync(clientBackupDir)) {
+                    fs.mkdirSync(clientBackupDir, { recursive: true });
+                    console.log(`📁 Diretório de backups criado para ${apiKey}`);
+                }
             }
         } catch (error) {
             console.error("❌ Erro ao criar diretório de backups:", error);
         }
     }
 
-    createBackup(type = "manual") {
+    createBackup(apiKey, type = "manual") {
         try {
+            this.ensureBackupDirectory(apiKey);
+            
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            
             const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
             const filename = `leads-backup-${type}-${timestamp}.json`;
-            const backupPath = path.join(this.backupDir, filename);
+            const backupPath = path.join(clientBackupDir, filename);
             
+            const leads = this.leadSystem.loadLeads(apiKey);
             const backupData = {
                 timestamp: new Date().toISOString(),
                 type: type,
-                leadsCount: this.leadSystem.leads.length,
-                leads: this.leadSystem.leads
+                apiKey: apiKey,
+                leadsCount: leads.length,
+                leads: leads
             };
             
             fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
-            console.log(`✅ Backup criado: ${filename} (${this.leadSystem.leads.length} leads)`);
+            console.log(`✅ Backup criado para ${apiKey}: ${filename} (${leads.length} leads)`);
             
-            // Limpar backups antigos
-            this.cleanOldBackups();
+            // Limpar backups antigos deste cliente
+            this.cleanOldBackups(apiKey);
             
-            return { success: true, filename, path: backupPath };
+            return { success: true, filename, path: backupPath, leadsCount: leads.length };
         } catch (error) {
-            console.error("❌ Erro ao criar backup:", error);
+            console.error(`❌ Erro ao criar backup para ${apiKey}:`, error);
             return { success: false, error: error.message };
         }
     }
 
-    cleanOldBackups() {
+    cleanOldBackups(apiKey) {
         try {
-            const files = fs.readdirSync(this.backupDir)
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            
+            if (!fs.existsSync(clientBackupDir)) return;
+            
+            const files = fs.readdirSync(clientBackupDir)
                 .filter(f => f.startsWith("leads-backup-"))
                 .map(f => ({
                     name: f,
-                    path: path.join(this.backupDir, f),
-                    time: fs.statSync(path.join(this.backupDir, f)).mtime.getTime()
+                    path: path.join(clientBackupDir, f),
+                    time: fs.statSync(path.join(clientBackupDir, f)).mtime.getTime()
                 }))
                 .sort((a, b) => b.time - a.time);
             
@@ -265,20 +278,27 @@ class LeadBackupSystem {
                 const filesToDelete = files.slice(this.maxBackups);
                 filesToDelete.forEach(file => {
                     fs.unlinkSync(file.path);
-                    console.log(`🗑️ Backup antigo removido: ${file.name}`);
+                    console.log(`🗑️ Backup antigo removido para ${apiKey}: ${file.name}`);
                 });
             }
         } catch (error) {
-            console.error("❌ Erro ao limpar backups antigos:", error);
+            console.error(`❌ Erro ao limpar backups antigos para ${apiKey}:`, error);
         }
     }
 
-    listBackups() {
+    listBackups(apiKey) {
         try {
-            const files = fs.readdirSync(this.backupDir)
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            
+            if (!fs.existsSync(clientBackupDir)) {
+                return [];
+            }
+            
+            const files = fs.readdirSync(clientBackupDir)
                 .filter(f => f.startsWith("leads-backup-"))
                 .map(f => {
-                    const filePath = path.join(this.backupDir, f);
+                    const filePath = path.join(clientBackupDir, f);
                     const stats = fs.statSync(filePath);
                     const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
                     return {
@@ -294,14 +314,16 @@ class LeadBackupSystem {
             
             return files;
         } catch (error) {
-            console.error("❌ Erro ao listar backups:", error);
+            console.error(`❌ Erro ao listar backups para ${apiKey}:`, error);
             return [];
         }
     }
 
-    restoreBackup(filename) {
+    restoreBackup(apiKey, filename) {
         try {
-            const backupPath = path.join(this.backupDir, filename);
+            const sanitizedKey = apiKey.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const clientBackupDir = path.join(this.backupDir, sanitizedKey);
+            const backupPath = path.join(clientBackupDir, filename);
             
             if (!fs.existsSync(backupPath)) {
                 return { success: false, error: "Backup não encontrado" };
@@ -310,13 +332,12 @@ class LeadBackupSystem {
             const backupData = JSON.parse(fs.readFileSync(backupPath, "utf8"));
             
             // Criar backup do estado atual antes de restaurar
-            this.createBackup("pre-restore");
+            this.createBackup(apiKey, "pre-restore");
             
             // Restaurar leads
-            this.leadSystem.leads = backupData.leads;
-            this.leadSystem.saveLeads();
+            this.leadSystem.saveLeads(apiKey, backupData.leads);
             
-            console.log(`✅ Backup restaurado: ${filename} (${backupData.leadsCount} leads)`);
+            console.log(`✅ Backup restaurado para ${apiKey}: ${filename} (${backupData.leadsCount} leads)`);
             
             return { 
                 success: true, 
@@ -349,6 +370,9 @@ class LeadBackupSystem {
         process.on("SIGINT", shutdown);
     }
 }
+
+// Inicializar sistema de backup
+const backupSystem = new LeadBackupSystem(leadSystem);
 
 // ===== SISTEMA DE ANÁLISE DE JORNADA DO CLIENTE =====
 class JourneyAnalyzer {
@@ -430,6 +454,7 @@ class JourneyAnalyzer {
 
 // Inicializar analisador de jornada
 const journeyAnalyzer = new JourneyAnalyzer();
+
 
 // ===== SISTEMA DE CAPTURA DE INTENÇÕES DO CLIENTE =====
 class SistemaCapturaInteligencias {
@@ -781,17 +806,6 @@ class SistemaExtracaoContatosAprimorado {
                 }
             });
         }
-
-        // Emails
-        const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-        const emails = texto.match(emailRegex);
-        if (emails) {
-            emails.forEach(email => {
-                if (!contatos.email.includes(email)) {
-                    contatos.email.push(email);
-                }
-            });
-        }
     }
 
     formatarNumeroBrasileiro(numero) {
@@ -807,12 +821,6 @@ class SistemaExtracaoContatosAprimorado {
             } else if (apenasDigitos.length === 11) { // 11 99999-9999
                 return `+55${apenasDigitos}`;
             }
-        }
-        
-        // Para números sem código do país
-        if (apenasDigitos.length === 11) { // 11 99999-9999
-            return `+55${apenasDigitos}`;
-        } else if (apenasDigitos.length === 10) { // 11 9999-9999
             return `+55${apenasDigitos}`;
         }
         
@@ -823,348 +831,6 @@ class SistemaExtracaoContatosAprimorado {
 
 // Inicializar sistema aprimorado de extração de contatos
 const sistemaContatosAprimorado = new SistemaExtracaoContatosAprimorado();
-
-// ===== SISTEMA DE SUPERINTELIGÊNCIA EMOCIONAL =====
-class SuperInteligenciaEmocional {
-    constructor() {
-        console.log("🧠 Sistema de SuperInteligência Emocional Inicializado");
-        
-        // Mapeamento de emoções e sentimentos
-        this.emociones = {
-            positivas: [
-                'feliz', 'alegre', 'contente', 'satisfeito', 'entusiasmado', 'animado',
-                'gratidão', 'grato', 'obrigado', 'agradecido', 'satisfeito', 'perfeito',
-                'excelente', 'ótimo', 'maravilhoso', 'incrível', 'fantástico', 'show'
-            ],
-            negativas: [
-                'triste', 'chateado', 'frustrado', 'irritado', 'nervoso', 'ansioso',
-                'preocupado', 'desapontado', 'decepcionado', 'bravo', 'raiva', 'ódio',
-                'péssimo', 'horrível', 'terrível', 'lento', 'difícil', 'complicado'
-            ],
-            urgentes: [
-                'urgente', 'urgência', 'imediatamente', 'agora', 'rápido', 'pressa',
-                'importante', 'crucial', 'emergência', 'prioridade', 'hoje', 'já'
-            ],
-            duvidas: [
-                'dúvida', 'duvida', 'pergunta', 'perguntar', 'como funciona', 'o que é',
-                'explicar', 'entender', 'compreender', 'não sei', 'não entendi'
-            ]
-        };
-
-        // Personalidades adaptativas
-        this.personalidades = {
-            consultivo: {
-                tom: "profissional e acolhedor",
-                empatia: "moderada", 
-                estilo: "focado em soluções",
-                saudacao: "Como posso ajudá-lo hoje?",
-                despedida: "Estou aqui para o que precisar!"
-            },
-            empatico: {
-                tom: "acolhedor e compreensivo", 
-                empatia: "alta",
-                estilo: "focado em emocional",
-                saudacao: "Oi! Como você está?",
-                despedida: "Fico feliz em poder ajudar!"
-            },
-            tecnico: {
-                tom: "detalhista e preciso",
-                empatia: "baixa",
-                estilo: "focado em informações", 
-                saudacao: "Vamos analisar sua situação",
-                despedida: "Precisa de mais detalhes?"
-            },
-            motivacional: {
-                tom: "entusiasmado e energético",
-                empatia: "alta",
-                estilo: "focado em resultados",
-                saudacao: "Vamos juntos nessa!",
-                despedida: "Você consegue! 💪"
-            }
-        };
-
-        // Sistema de agendamento
-        this.horariosDisponiveis = [
-            "Segunda 09:00", "Segunda 14:00", "Segunda 16:00",
-            "Terça 10:00", "Terça 15:00", "Terça 17:00", 
-            "Quarta 09:30", "Quarta 14:30", "Quarta 16:30",
-            "Quinta 11:00", "Quinta 15:30", "Quinta 17:30",
-            "Sexta 10:30", "Sexta 14:00", "Sexta 16:00"
-        ];
-    }
-
-    analisarEmocao(mensagem) {
-        const mensagemLower = mensagem.toLowerCase();
-        let emocao = "neutro";
-        let intensidade = 1;
-        let urgencia = false;
-
-        // Análise de emoções positivas
-        const positivas = this.emociones.positivas.filter(palavra => 
-            mensagemLower.includes(palavra)
-        ).length;
-
-        // Análise de emoções negativas  
-        const negativas = this.emociones.negativas.filter(palavra =>
-            mensagemLower.includes(palavra)
-        ).length;
-
-        // Detecção de urgência
-        urgencia = this.emociones.urgentes.some(palavra =>
-            mensagemLower.includes(palavra)
-        );
-
-        // Determinar emoção predominante
-        if (positivas > negativas && positivas > 0) {
-            emocao = "positivo";
-            intensidade = Math.min(3, positivas);
-        } else if (negativas > positivas && negativas > 0) {
-            emocao = "negativo"; 
-            intensidade = Math.min(3, negativas);
-        }
-
-        // Ajustar intensidade baseado em urgência
-        if (urgencia) {
-            intensidade += 1;
-        }
-
-        console.log(`🎭 Análise Emocional: ${emocao} (intensidade: ${intensidade}) ${urgencia ? '🚨 URGENTE' : ''}`);
-
-        return { emocao, intensidade, urgencia };
-    }
-
-    selecionarPersonalidade(emocao, intensidade, jornada) {
-        let personalidade = "consultivo";
-
-        if (emocao === "negativo" && intensidade >= 2) {
-            personalidade = "empatico";
-        } else if (jornada === "negociacao" && emocao === "positivo") {
-            personalidade = "motivacional"; 
-        } else if (jornada === "descoberta" && emocao === "neutro") {
-            personalidade = "tecnico";
-        } else if (emocao === "positivo" && intensidade >= 2) {
-            personalidade = "motivacional";
-        }
-
-        console.log(`🎨 Personalidade selecionada: ${personalidade}`);
-        return this.personalidades[personalidade];
-    }
-
-    gerarRespostaEmpatica(mensagem, emocao, personalidade, contatos) {
-        let respostaBase = "";
-        const excitementWord = journeyAnalyzer.getRandomSynonym('empolgação');
-
-        // Respostas baseadas na emoção detectada
-        switch (emocao.emocao) {
-            case "positivo":
-                if (emocao.intensidade >= 2) {
-                    respostaBase = `🎉 **Que ${excitementWord} ver seu entusiasmo!** `;
-                } else {
-                    respostaBase = `😊 **Fico feliz em saber!** `;
-                }
-                break;
-            case "negativo":
-                if (emocao.intensidade >= 2) {
-                    respostaBase = `🤗 **Entendo sua frustração e estou aqui para ajudar.** `;
-                } else {
-                    respostaBase = `👂 **Compreendo sua preocupação.** `;
-                }
-                break;
-            default:
-                respostaBase = `💭 **Ótima pergunta!** `;
-        }
-
-        // Adicionar urgencia se detectada
-        if (emocao.urgencia) {
-            respostaBase = `🚨 **Prioridade máxima!** ` + respostaBase;
-        }
-
-        // Adaptar tom baseado na personalidade
-        switch (personalidade.tom) {
-            case "acolhedor e compreensivo":
-                respostaBase += "Vamos resolver isso juntos, passo a passo. ";
-                break;
-            case "entusiasmado e energético":
-                respostaBase += "Você está no caminho certo! ";
-                break;
-            case "detalhista e preciso":
-                respostaBase += "Deixe-me explicar detalhadamente. ";
-                break;
-            default:
-                respostaBase += "Aqui estão as informações que você precisa: ";
-        }
-
-        return respostaBase;
-    }
-
-    // ===== SISTEMA DE AGENDAMENTO INTELIGENTE =====
-    detectarAgendamento(mensagem) {
-        const mensagemLower = mensagem.toLowerCase();
-        const palavrasAgendamento = [
-            'agendar', 'marcar', 'reunião', 'reuniao', 'encontro', 'consulta',
-            'horário', 'horario', 'data', 'hora', 'telefone', 'call', 'vídeo',
-            'video', 'encontro', 'conversar', 'falar', 'ligar', 'whatsapp'
-        ];
-
-        const isAgendamento = palavrasAgendamento.some(palavra => 
-            mensagemLower.includes(palavra)
-        );
-
-        if (isAgendamento) {
-            console.log("📅 Solicitação de agendamento detectada");
-            return this.gerarOpcoesAgendamento();
-        }
-
-        return null;
-    }
-
-    gerarOpcoesAgendamento() {
-        const horarios = this.horariosDisponiveis.slice(0, 3); // 3 primeiros horários
-        let resposta = `**📅 AGENDAMENTO DISPONÍVEL**\n\n`;
-        resposta += `Encontrei estes horários para nossa conversa:\n\n`;
-        
-        horarios.forEach((horario, index) => {
-            resposta += `${index + 1}. ${horario}\n`;
-        });
-        
-        resposta += `\n💬 **Qual horário prefere?**\n`;
-        resposta += `📞 Ou se preferir, posso passar nossos contatos diretos!`;
-        
-        return resposta;
-    }
-
-    processarAgendamento(mensagem) {
-        const mensagemLower = mensagem.toLowerCase();
-        
-        // Detectar seleção de horário
-        for (let i = 0; i < this.horariosDisponiveis.length; i++) {
-            if (mensagemLower.includes((i + 1).toString()) || 
-                mensagemLower.includes(this.horariosDisponiveis[i].toLowerCase())) {
-                
-                return `✅ **AGENDAMENTO CONFIRMADO!**\n\n` +
-                       `📅 **Horário:** ${this.horariosDisponiveis[i]}\n` +
-                       `🎯 **Próximo passo:** Nossa equipe entrará em contato para confirmar.\n` +
-                       `📞 **Contato direto:** Veja nossos canais acima! ⬆️`;
-            }
-        }
-
-        return null;
-    }
-}
-
-// Inicializar SuperInteligência
-const superInteligencia = new SuperInteligenciaEmocional();
-
-// ===== SISTEMA DE BOTÕES FIXOS NO TOPO =====
-function gerarBotoesFixos(contatos, robotName) {
-    let botoesHTML = `
-    <div class="lm-botoes-fixos" style="
-        position: sticky; 
-        top: 0; 
-        background: white; 
-        padding: 15px; 
-        border-bottom: 2px solid #3b82f6;
-        z-index: 1000;
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        justify-content: center;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    ">
-        <div style="font-weight: bold; color: #1e40af; width: 100%; text-align: center; margin-bottom: 10px;">
-            📞 Fale com ${robotName}
-        </div>
-    `;
-
-    // Botão de WhatsApp
-    if (contatos.whatsapp && contatos.whatsapp.length > 0) {
-        const whatsappNum = contatos.whatsapp[0].replace(/\D/g, '');
-        botoesHTML += `
-        <a href="https://wa.me/${whatsappNum}" target="_blank" style="
-            background: #25D366; 
-            color: white; 
-            padding: 12px 20px; 
-            border-radius: 25px; 
-            text-decoration: none; 
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-            box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
-        " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(37, 211, 102, 0.4)';" 
-           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(37, 211, 102, 0.3)';">
-            <i class="fab fa-whatsapp"></i> WhatsApp
-        </a>`;
-    }
-
-    // Botão de Telefone
-    if (contatos.telefone && contatos.telefone.length > 0) {
-        const telefoneNum = contatos.telefone[0].replace(/\D/g, '');
-        botoesHTML += `
-        <a href="tel:${telefoneNum}" style="
-            background: #3b82f6; 
-            color: white; 
-            padding: 12px 20px; 
-            border-radius: 25px; 
-            text-decoration: none; 
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-        " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)';" 
-           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(59, 130, 246, 0.3)';">
-            <i class="fas fa-phone"></i> Ligar
-        </a>`;
-    }
-
-    // Botão de Agendamento
-    botoesHTML += `
-    <button onclick="iniciarAgendamento()" style="
-        background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); 
-        color: white; 
-        padding: 12px 20px; 
-        border-radius: 25px; 
-        border: none;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        cursor: pointer;
-        transition: all 0.3s;
-        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-    " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(139, 92, 246, 0.4)';" 
-       onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(139, 92, 246, 0.3)';">
-        <i class="fas fa-calendar-check"></i> Agendar
-    </button>`;
-
-    // Botão de Site
-    if (contatos.site && contatos.site.length > 0) {
-        botoesHTML += `
-        <a href="${contatos.site[0]}" target="_blank" style="
-            background: #10B981; 
-            color: white; 
-            padding: 12px 20px; 
-            border-radius: 25px; 
-            text-decoration: none; 
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-        " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(16, 185, 129, 0.4)';" 
-           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(16, 185, 129, 0.3)';">
-            <i class="fas fa-globe"></i> Site
-        </a>`;
-    }
-
-    botoesHTML += `</div>`;
-
-    return botoesHTML;
-}
 
 // ===== Enhanced Logger =====
 const logger = winston.createLogger({
@@ -1183,10 +849,12 @@ const logger = winston.createLogger({
         })
     ]
 });
+loadApiKeys();
+
+
 
 // ===== SISTEMA APRIMORADO DE DETECÇÃO DE BÔNUS =====
-class SistemaExtracaoApurado {
-    constructor() {
+class SistemaExtracaoApurado {  constructor() {
         this.termosBonus = [
             'bônus', 'bonus', 'brinde', 'presente', 'extra', 'grátis', 'gratis',
             'incluído', 'incluido', 'adicional', 'oferta', 'promocional',
@@ -1335,7 +1003,7 @@ class SistemaExtracaoApurado {
         const garantias = [];
         const seletoresGarantia = [
             '[class*="garantia"]', '[class*="guarantee"]', '[class*="warranty"]',
-            '.safe, .security, .refund'
+            '.safe', '.security', '.refund'
         ];
 
         seletoresGarantia.forEach(seletor => {
@@ -1613,6 +1281,9 @@ const sistemaValidacao = new ValidacaoCruzada();
 app.set("trust proxy", true);
 
 // ===== Session Configuration =====
+// const session = require("express-session");
+
+// Configuração de Sessão para Produção
 let sessionConfig = {
     secret: process.env.SESSION_SECRET || "fallback-secret-change-in-production",
     resave: false,
@@ -1709,22 +1380,9 @@ function validateApiKey(apiKey) {
 // ===== API Key Middleware =====
 function requireApiKey(req, res, next) {
     logger.info(`[requireApiKey] Path: ${req.path}, Session Validated: ${!!(req.session && req.session.validatedApiKey)}`);
-
-    // Permitir acesso a rotas públicas sem API Key
+    
     if (req.path === "/" || req.path === "/validate-api-key" || req.path.startsWith("/public/") || req.path === "/chat.html" || req.path === "/chatbot") {
         return next();
-    }
-
-    let apiKey = req.query.apiKey || req.body.apiKey || (req.headers['authorization'] && req.headers['authorization'].split(' ')[1]);
-
-    if (apiKey) {
-        const validation = validateApiKey(apiKey);
-        if (validation.success) {
-            req.session.validatedApiKey = apiKey;
-            req.session.clientData = validation.client;
-            req.cliente = validation.client;
-            return next();
-        }
     }
 
     if (req.session && req.session.validatedApiKey) {
@@ -1732,7 +1390,6 @@ function requireApiKey(req, res, next) {
         return next();
     }
 
-    // Se a API Key não for encontrada ou for inválida, e não houver sessão validada, redirecionar para a página inicial
     return res.redirect("/");
 }
 
@@ -1767,7 +1424,6 @@ app.post("/validate-api-key", (req, res) => {
 
     req.session.validatedApiKey = apiKey;
     req.session.clientData = validation.client;
-    req.cliente = validation.client; // Ensure req.cliente is set immediately after validation
     
     res.json({ 
         success: true, 
@@ -1787,16 +1443,11 @@ app.get("/excluir-dados", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "excluir-dados.html"));
 });
 
-// ===== DASHBOARD V2.0 =====
-app.get("/dashboard", requireApiKey, (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "dashboard-v2.html"));
-});
-
 // ===== ROTAS DE ADMINISTRAÇÃO DE LEADS =====
 app.get("/admin/leads", requireApiKey, (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    const leads = leadSystem.getLeads();
-    console.log(`📊 Retornando ${leads.length} leads para admin`);
+    const apiKey = req.session.validatedApiKey;
+    const leads = leadSystem.getLeads(apiKey);
+    console.log(`📊 Retornando ${leads.length} leads para ${apiKey}`);
     res.json({
         success: true,
         leads: leads,
@@ -1805,8 +1456,8 @@ app.get("/admin/leads", requireApiKey, (req, res) => {
 });
 
 app.get("/admin/leads/:id", requireApiKey, (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    const lead = leadSystem.getLeadById(req.params.id);
+    const apiKey = req.session.validatedApiKey;
+    const lead = leadSystem.getLeadById(apiKey, req.params.id);
     if (lead) {
         res.json({ success: true, lead });
     } else {
@@ -1816,16 +1467,14 @@ app.get("/admin/leads/:id", requireApiKey, (req, res) => {
 
 // ===== ROTAS DE BACKUP DE LEADS =====
 app.post("/admin/leads/backup/create", requireApiKey, (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    const backupSystem = getBackupSystem(leadSystem, req.cliente.apiKey);
-    const result = backupSystem.createBackup("manual");
+    const apiKey = req.session.validatedApiKey;
+    const result = backupSystem.createBackup(apiKey, "manual");
     res.json(result);
 });
 
 app.get("/admin/leads/backup/list", requireApiKey, (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    const backupSystem = getBackupSystem(leadSystem, req.cliente.apiKey);
-    const backups = backupSystem.listBackups();
+    const apiKey = req.session.validatedApiKey;
+    const backups = backupSystem.listBackups(apiKey);
     res.json({
         success: true,
         backups: backups,
@@ -1834,6 +1483,7 @@ app.get("/admin/leads/backup/list", requireApiKey, (req, res) => {
 });
 
 app.post("/admin/leads/backup/restore", requireApiKey, (req, res) => {
+    const apiKey = req.session.validatedApiKey;
     const { filename } = req.body;
     
     if (!filename) {
@@ -1842,9 +1492,8 @@ app.post("/admin/leads/backup/restore", requireApiKey, (req, res) => {
             error: "Nome do arquivo de backup é obrigatório"
         });
     }
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    const backupSystem = getBackupSystem(leadSystem, req.cliente.apiKey);
-    const result = backupSystem.restoreBackup(filename);
+    
+    const result = backupSystem.restoreBackup(apiKey, filename);
     res.json(result);
 });
 
@@ -2012,6 +1661,8 @@ function extractCleanTextFromHTML(html) {
 }
 
 // ===== Page extraction =====
+
+// ===== FUNÇÃO DE RETRY COM TIMEOUT MELHORADO =====
 async function extractPageDataWithRetry(url, maxRetries = 3) {
     let lastError = null;
     
@@ -2173,7 +1824,7 @@ async function extractPageData(url) {
                 extractedData.bonuses_detected = extractBonuses(bodyText);
 
                 // 🎯 EXTRAIR CONTATOS
-                extractedData.contatos = sistemaContatosAprimorado.extrairContatosAprimorado($);
+                extractedData.contatos = sistemaExtracao.extrairContatos($);
 
                 logger.info(`Cheerio extraction completed for ${url}`);
                 analytics.successfulExtractions++;
@@ -2388,7 +2039,7 @@ function shouldActivateSalesMode(instructions) {
 }
 
 // ===== FUNÇÃO APRIMORADA DE RESPOSTA DA IA =====
-async function generateAIResponse(userMessage, pageData = {}, conversationHistory = [], instructions = "", leadId = null) {
+async function generateAIResponse(userMessage, pageData = {}, conversationHistory = [], instructions = "", leadId = null, apiKey = null) {
     const startTime = Date.now();
     try {
         if (!userMessage || !String(userMessage).trim()) {
@@ -2396,7 +2047,7 @@ async function generateAIResponse(userMessage, pageData = {}, conversationHistor
         }
 
         // 🎯 CORREÇÃO: Limpar mensagem de caracteres especiais
-        const cleanUserMessage = String(userMessage).replace(/<s>\s*\[OUT\]/g, '').replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '').trim();
+        const cleanUserMessage = leadSystem.cleanMessage(userMessage);
         if (!cleanUserMessage) {
             return "Desculpe, não entendi sua mensagem. Poderia reformular?";
         }
@@ -2407,9 +2058,8 @@ async function generateAIResponse(userMessage, pageData = {}, conversationHistor
         const excitementWord = journeyAnalyzer.getRandomSynonym('empolgação');
 
         // Atualizar estágio do lead se existir
-        if (leadId) {
-            const leadSystem = getLeadSystem(process.env.API_KEYS_JSON ? JSON.parse(process.env.API_KEYS_JSON)[0] : "default");
-            leadSystem.updateLeadJourneyStage(leadId, journeyStage);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadJourneyStage(apiKey, leadId, journeyStage);
         }
 
         // 🎯 DETECÇÃO APRIMORADA DE BÔNUS
@@ -2517,7 +2167,7 @@ RESPONDA em português de forma natural e envolvente.`;
         }
 
         // 🎯 CORREÇÃO FINAL: Limpar resposta de qualquer caractere especial
-        const finalResponse = String(response).replace(/<s>\s*\[OUT\]/g, '').replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '').trim();
+        const finalResponse = leadSystem.cleanMessage(clampSentences(String(response).trim(), 3));
         const responseTime = Date.now() - startTime;
         
         console.log(`🤖 [IA RESPONSE] Jornada: ${journeyStage} | Bônus: ${shouldMentionBonus}`);
@@ -2634,10 +2284,9 @@ app.get("/health", (req, res) => {
 });
 
 // ===== ENDPOINT: Captura de Lead =====
-app.post("/api/capture-lead", requireApiKey, async (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
+app.post("/api/capture-lead", async (req, res) => {
     try {
-        const { nome, email, telefone, url_origem, robotName } = req.body || {};
+        const { nome, email, telefone, url_origem, robotName, apiKey } = req.body || {};
         
         if (!email) {
             return res.status(400).json({ 
@@ -2646,8 +2295,15 @@ app.post("/api/capture-lead", requireApiKey, async (req, res) => {
             });
         }
 
-        // Verificar se lead já existe
-        const existingLead = leadSystem.findLeadByEmail(email);
+        if (!apiKey) {
+            return res.status(400).json({ 
+                success: false, 
+                error: "API Key é obrigatória" 
+            });
+        }
+
+        // Verificar se lead já existe para este cliente
+        const existingLead = leadSystem.findLeadByEmail(apiKey, email);
         if (existingLead) {
             return res.json({ 
                 success: true, 
@@ -2656,8 +2312,8 @@ app.post("/api/capture-lead", requireApiKey, async (req, res) => {
             });
         }
 
-        // Criar novo lead
-        const newLead = leadSystem.addLead({
+        // Criar novo lead para este cliente
+        const newLead = leadSystem.addLead(apiKey, {
             nome: nome || "Não informado",
             email,
             telefone: telefone || "Não informado",
@@ -2667,7 +2323,7 @@ app.post("/api/capture-lead", requireApiKey, async (req, res) => {
 
         analytics.leadsCaptured++;
         
-        console.log(`🎯 NOVO LEAD CAPTURADO: ${newLead.nome} (${newLead.email})`);
+        console.log(`🎯 NOVO LEAD CAPTURADO para ${apiKey}: ${newLead.nome} (${newLead.email})`);
 
         res.json({ 
             success: true, 
@@ -2685,11 +2341,10 @@ app.post("/api/capture-lead", requireApiKey, async (req, res) => {
 });
 
 // ===== ENDPOINT CHAT COM CAPTURA DE LEAD =====
-app.post("/api/chat-universal", requireApiKey, async (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
+app.post("/api/chat-universal", async (req, res) => {
     analytics.chatRequests++;
     try {
-        const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
+        const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
         
         if (!message) {
             return res.status(400).json({ 
@@ -2709,15 +2364,15 @@ app.post("/api/chat-universal", requireApiKey, async (req, res) => {
         }
 
         // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, message, true);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, message, true);
         }
 
-        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
+        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId, apiKey);
 
         // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, aiResponse, false);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, aiResponse, false);
         }
 
         let finalResponse = aiResponse;
@@ -2745,12 +2400,11 @@ app.post("/api/chat-universal", requireApiKey, async (req, res) => {
     }
 });
 
-// ===== 🎯 ENDPOINT SUPERINTELIGENTE - /api/process-chat-inteligente =====
-app.post("/api/process-chat-inteligente", requireApiKey, async (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
+// ===== 🎯 NOVO ENDPOINT INTELIGENTE - /api/process-chat-inteligente =====
+app.post("/api/process-chat-inteligente", async (req, res) => {
     analytics.chatRequests++;
     try {
-        const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
+        const { message, pageData, url, conversationId, instructions = "", robotName, leadId, apiKey } = req.body || {};
         
         if (!message) {
             return res.status(400).json({ 
@@ -2759,10 +2413,11 @@ app.post("/api/process-chat-inteligente", requireApiKey, async (req, res) => {
             });
         }
 
-        console.log('🧠 [SUPER-INTELIGENCIA] Processando mensagem:', { 
+        console.log('🧠 [CHAT-INTELIGENTE] Processando mensagem:', { 
             messageLength: message.length,
             url: url || 'none',
-            leadId: leadId || 'none'
+            leadId: leadId || 'none',
+            apiKey: apiKey || 'none'
         });
 
         if (conversationId) {
@@ -2775,89 +2430,44 @@ app.post("/api/process-chat-inteligente", requireApiKey, async (req, res) => {
             processedPageData = await extractPageData(url);
         }
 
-        // 🎯 SUPERINTELIGÊNCIA: Análise Emocional Avançada
-        const analiseEmocional = superInteligencia.analisarEmocao(message);
-        
         // 🎯 CAPTURA DE INTENÇÕES DO CLIENTE
         const inteligencias = sistemaInteligencias.capturarInteligencias(message);
         
         // 🎯 ANÁLISE DE JORNADA
         const journeyStage = journeyAnalyzer.analyzeJourneyStage(message);
         
-        // 🎯 SELEÇÃO DE PERSONALIDADE ADAPTATIVA
-        const personalidade = superInteligencia.selecionarPersonalidade(
-            analiseEmocional.emocao, 
-            analiseEmocional.intensidade, 
-            journeyStage
-        );
-
         // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, message, true);
-            leadSystem.updateLeadJourneyStage(leadId, journeyStage);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, message, true);
+            leadSystem.updateLeadJourneyStage(apiKey, leadId, journeyStage);
         }
 
         let finalResponse = "";
 
-        // 🎯 DETECTAR AGENDAMENTO
-        const respostaAgendamento = superInteligencia.detectarAgendamento(message);
-        if (respostaAgendamento) {
-            finalResponse = respostaAgendamento;
-            console.log("📅 Resposta de agendamento gerada");
-        }
-        // 🎯 PROCESSAR CONFIRMAÇÃO DE AGENDAMENTO
-        else if (superInteligencia.processarAgendamento(message)) {
-            finalResponse = superInteligencia.processarAgendamento(message);
-            console.log("✅ Confirmação de agendamento processada");
-        }
         // 🎯 USAR SISTEMA INTELIGENTE SE INTENÇÕES FORAM DETECTADAS
-        else if (Object.values(inteligencias).some(val => val === true)) {
+        if (Object.values(inteligencias).some(val => val === true)) {
             const contatos = processedPageData?.contatos || {};
-            
-            // Gerar resposta base com empatia
-            const respostaEmpatica = superInteligencia.gerarRespostaEmpatica(
-                message, 
-                analiseEmocional, 
-                personalidade, 
-                contatos
-            );
-            
-            // Combinar com resposta contextual
-            const respostaContextual = sistemaInteligencias.gerarRespostaContextual(
+            finalResponse = sistemaInteligencias.gerarRespostaContextual(
                 inteligencias, 
                 contatos, 
                 journeyStage
             );
-            
-            finalResponse = respostaEmpatica + respostaContextual;
-            console.log(`🎭 Resposta emocional inteligente gerada`);
+            console.log(`🎯 [CHAT-INTELIGENTE] Resposta contextual gerada: ${finalResponse.length} caracteres`);
         } else {
-            // 🎯 USAR SISTEMA ORIGINAL COM MELHORIAS EMOCIONAIS
-            const respostaIA = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
-            
-            // Aplicar melhorias emocionais na resposta
-            if (analiseEmocional.emocao === "negativo" && analiseEmocional.intensidade >= 2) {
-                finalResponse = `🤗 **Entendo que isso é importante para você.** ` + respostaIA;
-            } else if (analiseEmocional.urgencia) {
-                finalResponse = `🚨 **Priorizando sua solicitação!** ` + respostaIA;
-            } else {
-                finalResponse = respostaIA;
-            }
-            
-            console.log(`🤖 Resposta IA com melhorias emocionais`);
+            // 🎯 USAR SISTEMA ORIGINAL SE NENHUMA INTENÇÃO ESPECÍFICA
+            finalResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId, apiKey);
+            console.log(`🤖 [CHAT-INTELIGENTE] Resposta IA gerada: ${finalResponse.length} caracteres`);
         }
 
         // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, finalResponse, false);
+        if (leadId && apiKey) {
+            leadSystem.updateLeadConversation(apiKey, leadId, finalResponse, false);
         }
 
         return res.json({
             success: true,
             response: finalResponse,
             inteligenciasDetectadas: inteligencias,
-            analiseEmocional: analiseEmocional,
-            personalidadeSelecionada: personalidade,
             journeyStage: journeyStage,
             bonuses_detected: processedPageData?.bonuses_detected || [],
             contatos: processedPageData?.contatos || {},
@@ -2865,13 +2475,13 @@ app.post("/api/process-chat-inteligente", requireApiKey, async (req, res) => {
                 hasPageData: !!processedPageData,
                 contentLength: processedPageData?.cleanText?.length || 0,
                 method: processedPageData?.method || "none",
-                sistema: "super-inteligencia-v1"
+                sistema: "chat-inteligente"
             }
         });
 
     } catch (error) {
         analytics.errors++;
-        logger.error("Super inteligencia endpoint error:", error.message || error);
+        logger.error("Chat inteligente endpoint error:", error.message || error);
         return res.status(500).json({ 
             success: false, 
             error: "Erro interno ao gerar resposta inteligente: " + (error.message || "Erro desconhecido"),
@@ -2993,229 +2603,15 @@ app.post("/api/extract", async (req, res) => {
     }
 });
 
-// ===== FUNÇÃO: Geração Completa do HTML do Chatbot =====
-function generateFullChatbotHTML(pageData = {}, robotName = 'Assistente IA', customInstructions = '') {
-    const escapedPageData = JSON.stringify(pageData || {});
-    const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
-    const safeInstructions = String(customInstructions || '').replace(/"/g, '\\"');
-    
-    // Gerar botões fixos com contatos
-    const contatos = pageData.contatos || {
-        telefone: [],
-        whatsapp: [], 
-        email: [],
-        site: [pageData.url || ''],
-        endereco: []
-    };
-    
-    const botoesFixos = gerarBotoesFixos(contatos, safeRobotName);
-
-    return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LinkMágico Chatbot - ${safeRobotName}</title>
-<meta name="description" content="Chatbot IA - ${safeRobotName}"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
-.chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative}
-.chat-header h1{font-size:1.5rem;font-weight:600}
-.chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px}
-.chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc}
-.chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
-.chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
-.chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
-.chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px}
-.chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
-.chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
-.send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
-.send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
-.typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px}
-.typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite}
-.typing-dot:nth-child(2){animation-delay:0.2s}
-.typing-dot:nth-child(3){animation-delay:0.4s}
-@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-.lead-form{background:white;padding:25px;margin:20px;border-radius:15px;box-shadow:0 8px 25px rgba(0,0,0,0.1);text-align:center}
-.lead-form h3{color:#1e40af;margin-bottom:10px}
-.lead-form p{color:#64748b;margin-bottom:20px}
-.lead-form input{width:100%;padding:15px;margin-bottom:15px;border:2px solid#e2e8f0;border-radius:10px;font-size:1rem;transition:all 0.3s}
-.lead-form input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.lead-form button{width:100%;background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;border:none;padding:15px;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:600;transition:all 0.3s}
-.lead-form button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(59,130,246,0.3)}
-.contact-buttons{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap}
-.contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:5px}
-.contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)}
-.lm-botoes-fixos a, .lm-botoes-fixos button { font-size: 0.85rem; }
-@media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}.lead-form{margin:10px;padding:20px}.contact-button{min-width:100px;font-size:0.8rem}.lm-botoes-fixos{padding:10px !important}.lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}}
-</style>
-</head>
-<body>
-<div class="chat-container">
-<div class="chat-header">
-<h1>${safeRobotName}</h1>
-<div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div>
-</div>
-
-${botoesFixos}
-
-<div class="lead-form" id="leadForm">
-<h3>🎯 Vamos começar!</h3>
-<p>Deixe seus dados para uma experiência personalizada</p>
-<input type="text" id="leadName" placeholder="Seu nome completo">
-<input type="email" id="leadEmail" placeholder="Seu melhor email" required>
-<input type="tel" id="leadPhone" placeholder="Seu WhatsApp (opcional)">
-<button id="startChat"><i class="fas fa-comments" style="margin-right:8px"></i> Iniciar Conversa</button>
-</div>
-
-<div class="chat-messages" id="chatMessages" style="display:none">
-<div class="chat-message bot">Olá! Sou ${safeRobotName}, estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div>
-</div>
-
-<div class="chat-input-container" id="chatInputContainer" style="display:none">
-<input type="text" class="chat-input" id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off">
-<button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button>
-</div>
-
-<div class="typing-indicator" id="typingIndicator">
-<span>Digitando</span>
-<div class="typing-dot"></div>
-<div class="typing-dot"></div>
-<div class="typing-dot"></div>
-</div>
-</div>
-
-<script>
-const pageData = ${escapedPageData};
-const robotName = "${safeRobotName}";
-const customInstructions = "${safeInstructions}";
-
-const chatMessages = document.getElementById('chatMessages');
-const messageInput = document.getElementById('messageInput');
-const sendButton = document.getElementById('sendButton');
-const typingIndicator = document.getElementById('typingIndicator');
-const leadForm = document.getElementById('leadForm');
-const chatInputContainer = document.getElementById('chatInputContainer');
-const startChatBtn = document.getElementById('startChat');
-
-let leadId = null;
-let agendamentoAtivo = false;
-
-// Função para iniciar agendamento
-function iniciarAgendamento() {
-    const mensagem = "Gostaria de agendar uma reunião";
-    messageInput.value = mensagem;
-    sendMessage();
-}
-
-// Capturar lead
-startChatBtn.addEventListener('click', async function() {
-    const name = document.getElementById('leadName').value.trim();
-    const email = document.getElementById('leadEmail').value.trim();
-    const phone = document.getElementById('leadPhone').value.trim();
-
-    if (!email) {
-        alert('Por favor, informe seu email');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/capture-lead', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                nome: name || 'Não informado',
-                email: email,
-                telefone: phone || 'Não informado',
-                url_origem: window.location.href,
-                robotName: robotName
-            })
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-            leadId = data.lead.id;
-            leadForm.style.display = 'none';
-            chatMessages.style.display = 'flex';
-            chatInputContainer.style.display = 'flex';
-            
-            addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false);
-            messageInput.focus();
-        }
-    } catch (error) {
-        console.error('Erro ao capturar lead:', error);
-        alert('Erro ao processar. Tente novamente.');
-    }
-});
-
-function addMessage(text, isUser = false) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = \`chat-message \${isUser ? 'user' : 'bot'}\`;
-    messageDiv.textContent = text;
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-async function sendMessage() {
-    const message = messageInput.value.trim();
-    if (!message) return;
-
-    addMessage(message, true);
-    messageInput.value = '';
-    sendButton.disabled = true;
-    typingIndicator.style.display = 'flex';
-
-    try {
-        const response = await fetch('/api/process-chat-inteligente', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: message,
-                pageData: pageData,
-                robotName: robotName,
-                instructions: customInstructions,
-                conversationId: 'chatbot_' + Date.now(),
-                leadId: leadId
-            })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            addMessage(data.response, false);
-        } else {
-            addMessage('Desculpe, ocorreu um erro. Tente novamente.', false);
-        }
-    } catch (error) {
-        addMessage('Erro de conexão. Verifique sua internet.', false);
-    } finally {
-        typingIndicator.style.display = 'none';
-        sendButton.disabled = false;
-        messageInput.focus();
-    }
-}
-
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-});
-
-// Auto-focus no primeiro campo do formulário
-document.getElementById('leadName').focus();
-</script>
-</body>
-</html>`;
-}
-
 // Widget JS atualizado
 app.get("/public/widget.js", (req, res) => {
     res.set("Content-Type", "application/javascript");
-    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true\n        },\n        \n        getApiKeyFromQuery: function(name) {\n            const urlParams = new URLSearchParams(window.location.search);\n            return urlParams.get(name);\n        },\n\n        getStoredApiKey: function() {\n            return localStorage.getItem("lm_api_key");\n        },\n\n        storeApiKey: function(apiKey) {\n            localStorage.setItem("lm_api_key", apiKey);\n        },\n\n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json',\n                        'X-API-Key': this.config.apiKey\n                    },\n                    body: JSON.stringify({\n                        nome: name || 'Não informado',\n                        email: email,\n                        telefone: phone || 'Não informado',\n                        url_origem: window.location.href,\n                        robotName: this.config.robotName\n                    })\n                });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json',\n                        'X-API-Key': this.config.apiKey\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: this.config.salesUrl,\n                        instructions: this.config.instructions,\n                        robotName: this.config.robotName,\n                        conversationId: this.config.conversationId,\n                        leadId: this.leadId\n                    })\n                });\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
+    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true,
+            apiKey: ''\n        },\n        \n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\n                    body: JSON.stringify({\n                        nome: name || 'Não informado',\n                        email: email,\n                        telefone: phone || 'Não informado',\n                        url_origem: window.location.href,\n                         robotName: this.config.robotName,
+                        apiKey: this.config.apiKey\n                    })\n                });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json'\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: this.config.salesUrl,\n                        instructions: this.config.instructions,\n                         robotName: this.config.robotName,
+                        apiKey: this.config.apiKey,
+                        conversationId: this.config.conversationId,
+                        leadId: this.leadId\n                    })\n                });\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
 });
 
 function generateChatbotHTML({ robotName, url, instructions }) {
@@ -3344,7 +2740,8 @@ startChatBtn.addEventListener('click', async function() {
                 email: email,
                 telefone: phone || 'Não informado',
                 url_origem: window.location.href,
-                robotName: config.robotName
+                robotName: config.robotName,
+                apiKey: config.apiKey
             })
         });
 
@@ -3403,6 +2800,7 @@ async function sendMessage() {
                 url: config.url,
                 instructions: config.instructions,
                 robotName: config.robotName,
+                apiKey: config.apiKey,
                 conversationId: config.conversationId,
                 leadId: leadId
             })
@@ -3414,6 +2812,13 @@ async function sendMessage() {
         
         if (data.success) {
             addMessage(data.response);
+            
+            // Adicionar botões de contato se disponíveis
+            if (data.contatos && Object.keys(data.contatos).length > 0) {
+                setTimeout(() => {
+                    addContactButtons(data.contatos);
+                }, 500);
+            }
         } else {
             addMessage('Desculpe, ocorreu um erro. Tente novamente em alguns minutos.');
         }
@@ -3423,6 +2828,44 @@ async function sendMessage() {
     } finally {
         sendButton.disabled = false;
         chatInput.focus();
+    }
+}
+
+function addContactButtons(contatos) {
+    const buttonsDiv = document.createElement('div');
+    buttonsDiv.className = 'contact-buttons';
+    buttonsDiv.style.marginTop = '10px';
+    
+    if (contatos.telefone && contatos.telefone.length > 0) {
+        const telBtn = document.createElement('a');
+        telBtn.className = 'contact-button';
+        telBtn.innerHTML = '<i class="fas fa-phone"></i> Ligar';
+        telBtn.href = \`tel:\${contatos.telefone[0].replace(/\\D/g, '')}\`;
+        telBtn.target = '_blank';
+        buttonsDiv.appendChild(telBtn);
+    }
+    
+    if (contatos.whatsapp && contatos.whatsapp.length > 0) {
+        const whatsBtn = document.createElement('a');
+        whatsBtn.className = 'contact-button';
+        whatsBtn.innerHTML = '<i class="fab fa-whatsapp"></i> WhatsApp';
+        whatsBtn.href = \`https://wa.me/\${contatos.whatsapp[0].replace(/\\D/g, '')}\`;
+        whatsBtn.target = '_blank';
+        buttonsDiv.appendChild(whatsBtn);
+    }
+    
+    if (contatos.site && contatos.site.length > 0) {
+        const siteBtn = document.createElement('a');
+        siteBtn.className = 'contact-button';
+        siteBtn.innerHTML = '<i class="fas fa-globe"></i> Site';
+        siteBtn.href = contatos.site[0];
+        siteBtn.target = '_blank';
+        buttonsDiv.appendChild(siteBtn);
+    }
+    
+    if (buttonsDiv.children.length > 0) {
+        chatMessages.appendChild(buttonsDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 }
 
@@ -3441,6 +2884,259 @@ document.getElementById('leadName').focus();
 </html>`;
 }
 
+// ===== FUNÇÃO: Geração Completa do HTML do Chatbot =====
+function generateFullChatbotHTML(pageData = {}, robotName = 'Assistente IA', customInstructions = '') {
+    const escapedPageData = JSON.stringify(pageData || {});
+    const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
+    const safeInstructions = String(customInstructions || '').replace(/"/g, '\\"');
+
+    return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LinkMágico Chatbot - ${safeRobotName}</title>
+<meta name="description" content="Chatbot IA - ${safeRobotName}"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
+.chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative}
+.chat-header h1{font-size:1.5rem;font-weight:600}
+.chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px}
+.chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc}
+.chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
+.chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
+.chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
+.chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px}
+.chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
+.chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+.send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
+.send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
+.send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+.typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px}
+.typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite}
+.typing-dot:nth-child(2){animation-delay:0.2s}
+.typing-dot:nth-child(3){animation-delay:0.4s}
+@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.lead-form{background:white;padding:25px;margin:20px;border-radius:15px;box-shadow:0 8px 25px rgba(0,0,0,0.1);text-align:center}
+.lead-form h3{color:#1e40af;margin-bottom:10px}
+.lead-form p{color:#64748b;margin-bottom:20px}
+.lead-form input{width:100%;padding:15px;margin-bottom:15px;border:2px solid#e2e8f0;border-radius:10px;font-size:1rem;transition:all 0.3s}
+.lead-form input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+.lead-form button{width:100%;background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;border:none;padding:15px;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:600;transition:all 0.3s}
+.lead-form button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(59,130,246,0.3)}
+.contact-buttons{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap}
+.contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:5px}
+.contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)}
+@media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}.lead-form{margin:10px;padding:20px}.contact-button{min-width:100px;font-size:0.8rem}}
+</style>
+</head>
+<body>
+<div class="chat-container">
+<div class="chat-header">
+<h1>${safeRobotName}</h1>
+<div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div>
+</div>
+
+<div class="lead-form" id="leadForm">
+<h3>🎯 Vamos começar!</h3>
+<p>Deixe seus dados para uma experiência personalizada</p>
+<input type="text" id="leadName" placeholder="Seu nome completo">
+<input type="email" id="leadEmail" placeholder="Seu melhor email" required>
+<input type="tel" id="leadPhone" placeholder="Seu WhatsApp (opcional)">
+<button id="startChat"><i class="fas fa-comments" style="margin-right:8px"></i> Iniciar Conversa</button>
+</div>
+
+<div class="chat-messages" id="chatMessages" style="display:none">
+<div class="chat-message bot">Olá! Sou ${safeRobotName}, estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div>
+</div>
+
+<div class="chat-input-container" id="chatInputContainer" style="display:none">
+<input type="text" class="chat-input" id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off">
+<button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button>
+</div>
+
+<div class="typing-indicator" id="typingIndicator">
+<span>Digitando</span>
+<div class="typing-dot"></div>
+<div class="typing-dot"></div>
+<div class="typing-dot"></div>
+</div>
+</div>
+
+<script>
+const pageData = ${escapedPageData};
+const robotName = "${safeRobotName}";
+const customInstructions = "${safeInstructions}";
+
+const chatMessages = document.getElementById('chatMessages');
+const messageInput = document.getElementById('messageInput');
+const sendButton = document.getElementById('sendButton');
+const typingIndicator = document.getElementById('typingIndicator');
+const leadForm = document.getElementById('leadForm');
+const chatInputContainer = document.getElementById('chatInputContainer');
+const startChatBtn = document.getElementById('startChat');
+
+let leadId = null;
+
+// Capturar lead
+startChatBtn.addEventListener('click', async function() {
+    const name = document.getElementById('leadName').value.trim();
+    const email = document.getElementById('leadEmail').value.trim();
+    const phone = document.getElementById('leadPhone').value.trim();
+
+    if (!email) {
+        alert('Por favor, informe seu email');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/capture-lead', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nome: name || 'Não informado',
+                email: email,
+                telefone: phone || 'Não informado',
+                url_origem: window.location.href,
+                robotName: robotName
+            })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            leadId = data.lead.id;
+            leadForm.style.display = 'none';
+            chatMessages.style.display = 'flex';
+            chatInputContainer.style.display = 'flex';
+            
+            addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false);
+            messageInput.focus();
+        }
+    } catch (error) {
+        console.error('Erro ao capturar lead:', error);
+        alert('Erro ao processar. Tente novamente.');
+    }
+});
+
+function addMessage(text, isUser = false) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = \`chat-message \${isUser ? 'user' : 'bot'}\`;
+    messageDiv.textContent = text;
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function addContactButtons(contatos) {
+    const buttonsDiv = document.createElement('div');
+    buttonsDiv.className = 'contact-buttons';
+    
+    if (contatos.telefone && contatos.telefone.length > 0) {
+        const telBtn = document.createElement('a');
+        telBtn.className = 'contact-button';
+        telBtn.innerHTML = '<i class="fas fa-phone"></i> Ligar';
+        telBtn.href = \`tel:\${contatos.telefone[0].replace(/\\D/g, '')}\`;
+        telBtn.target = '_blank';
+        buttonsDiv.appendChild(telBtn);
+    }
+    
+    if (contatos.whatsapp && contatos.whatsapp.length > 0) {
+        const whatsBtn = document.createElement('a');
+        whatsBtn.className = 'contact-button';
+        whatsBtn.innerHTML = '<i class="fab fa-whatsapp"></i> WhatsApp';
+        whatsBtn.href = \`https://wa.me/\${contatos.whatsapp[0].replace(/\\D/g, '')}\`;
+        whatsBtn.target = '_blank';
+        buttonsDiv.appendChild(whatsBtn);
+    }
+    
+    if (contatos.site && contatos.site.length > 0) {
+        const siteBtn = document.createElement('a');
+        siteBtn.className = 'contact-button';
+        siteBtn.innerHTML = '<i class="fas fa-globe"></i> Site';
+        siteBtn.href = contatos.site[0];
+        siteBtn.target = '_blank';
+        buttonsDiv.appendChild(siteBtn);
+    }
+    
+    if (contatos.email && contatos.email.length > 0) {
+        const emailBtn = document.createElement('a');
+        emailBtn.className = 'contact-button';
+        emailBtn.innerHTML = '<i class="fas fa-envelope"></i> Email';
+        emailBtn.href = \`mailto:\${contatos.email[0]}\`;
+        emailBtn.target = '_blank';
+        buttonsDiv.appendChild(emailBtn);
+    }
+    
+    if (buttonsDiv.children.length > 0) {
+        chatMessages.appendChild(buttonsDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+async function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message) return;
+
+    addMessage(message, true);
+    messageInput.value = '';
+    sendButton.disabled = true;
+    typingIndicator.style.display = 'flex';
+
+    try {
+        const response = await fetch('/api/chat-universal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                pageData: pageData,
+                robotName: robotName,
+                instructions: customInstructions,
+                conversationId: 'chatbot_' + Date.now(),
+                leadId: leadId
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            addMessage(data.response, false);
+            
+            // Adicionar botões de contato se disponíveis
+            if (data.contatos && Object.keys(data.contatos).length > 0) {
+                setTimeout(() => {
+                    addContactButtons(data.contatos);
+                }, 500);
+            }
+        } else {
+            addMessage('Desculpe, ocorreu um erro. Tente novamente.', false);
+        }
+    } catch (error) {
+        addMessage('Erro de conexão. Verifique sua internet.', false);
+    } finally {
+        typingIndicator.style.display = 'none';
+        sendButton.disabled = false;
+        messageInput.focus();
+    }
+}
+
+sendButton.addEventListener('click', sendMessage);
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
+});
+
+// Auto-focus no primeiro campo do formulário
+document.getElementById('leadName').focus();
+</script>
+</body>
+</html>`;
+}
+
+// ===== Server Initialization =====
+const PORT = process.env.PORT || 3000;
+
 // ===== CONFIGURAR NOVAS ROTAS =====
 setupRoutes(app);
 
@@ -3449,7 +3145,7 @@ setupRoutes(app);
     await initialize();
     
     // Iniciar servidor
-    const PORT = process.env.PORT || 3000;
+    
 
 // ===== ROTAS DAS NOVAS INTEGRAÇÕES V3.0 =====
 
@@ -3608,70 +3304,21 @@ app.get('/api/crm/templates/:crm', (req, res) => {
 
 console.log('✅ Rotas V3.0 configuradas');
 
-// ===== DASHBOARD V2.0 ROTAS =====
-app.get('/api/dashboard/stats', requireApiKey, async (req, res) => {
-    try {
-        const leadSystem = getLeadSystem(req.cliente.apiKey);
-        const leads = leadSystem.getLeads();
-        
-        const stats = {
-            totalLeads: leads.length,
-            activeLeads: leads.filter(lead => lead.status === 'ativo').length,
-            leadsToday: leads.filter(lead => {
-                const today = new Date().toISOString().split('T')[0];
-                return lead.timestamp.split('T')[0] === today;
-            }).length,
-            journeyStages: {
-                descoberta: leads.filter(lead => lead.journeyStage === 'descoberta').length,
-                negociacao: leads.filter(lead => lead.journeyStage === 'negociacao').length,
-                fidelizacao: leads.filter(lead => lead.journeyStage === 'fidelizacao').length
-            },
-            totalConversations: leads.reduce((total, lead) => total + lead.conversations.length, 0)
-        };
-        
-        res.json({ success: true, stats });
-    } catch (error) {
-        logger.error('Erro ao buscar estatísticas do dashboard:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.get('/api/dashboard/analytics', requireApiKey, (req, res) => {
-    res.json({
-        success: true,
-        analytics: {
-            totalRequests: analytics.totalRequests,
-            chatRequests: analytics.chatRequests,
-            extractRequests: analytics.extractRequests,
-            leadsCaptured: analytics.leadsCaptured,
-            successfulExtractions: analytics.successfulExtractions,
-            failedExtractions: analytics.failedExtractions,
-            activeChats: analytics.activeChats.size,
-            avgResponseTime: analytics.responseTimeHistory.length > 0 ?
-                Math.round(analytics.responseTimeHistory.reduce((a, b) => a + b, 0) / analytics.responseTimeHistory.length) : 0
-        }
-    });
-});
-
 app.listen(PORT, '0.0.0.0', () => {
         logger.info(`Server running on port ${PORT}`);
         
         console.log(`🌐 Servidor rodando em http://0.0.0.0:${PORT}` );
-        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/dashboard` );
-        console.log(`🚀 LinkMágico v7.0 SUPERINTELIGENTE running on http://0.0.0.0:${PORT}` );
+        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/api/system/status` );
+        console.log(`🚀 LinkMágico v7.0 CORRIGIDO running on http://0.0.0.0:${PORT}` );
         console.log(`📊 Health check: http://0.0.0.0:${PORT}/health` );
         console.log(`🤖 Chatbot disponível em: http://0.0.0.0:${PORT}/chatbot` );
         console.log(`🔧 Widget JS disponível em: http://0.0.0.0:${PORT}/public/widget.js` );
         console.log(`🎯 Sistema de captura de leads PERSISTENTE ATIVADO`);
         console.log(`📈 Painel de leads: http://0.0.0.0:${PORT}/admin/leads` );
         console.log(`📞 Extração de contatos: ATIVADA`);
-        console.log(`🧠 SUPERINTELIGÊNCIA EMOCIONAL: ATIVADA`);
-        console.log(`📅 Sistema de agendamento: ATIVADO`);
-        console.log(`🎯 Botões fixos no topo: IMPLEMENTADOS`);
+        console.log(`🛡️  Proteção contra caracteres especiais: ATIVADA`);
         console.log(`👥 Jornada do cliente: Análise inteligente ATIVADA`);
-        console.log(`🎭 Personalidades adaptativas: CONSULTIVO, EMPÁTICO, TÉCNICO, MOTIVACIONAL`);
-        console.log(`🚨 Detecção de urgência: ATIVADA`);
+        console.log(`🧠 Sistema de captura de intenções: ATIVADO`);
         console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
-        console.log(`📊 Dashboard V2.0: http://0.0.0.0:${PORT}/dashboard`);
     });
 })();
