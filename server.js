@@ -1,4 +1,3 @@
-                break;
             default:
                 respostaBase += "Aqui estão as informações que você precisa: ";
         }
@@ -66,6 +65,7 @@ const superInteligencia = new SuperInteligenciaEmocional();
 
 // ===== SISTEMA DE BOTÕES FIXOS NO TOPO =====
 function gerarBotoesFixos(contatos, robotName) {
+  
     let botoesHTML = `
     <div class="lm-botoes-fixos" style="
         position: sticky; 
