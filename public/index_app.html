@@ -1579,18 +1579,16 @@
                 // Atualizar links de compartilhamento social
                 updateSocialShareLinks(currentChatbotUrl, robotName);
 
-                // Atualiza o iframe do chatbot preview e código do widget
-                const userApiKey = sessionStorage.getItem('apiKey') || '';
+                // Atualiza o iframe do chatbot preview
                 const chatbotParams = new URLSearchParams({
                     url: salesUrl,
                     name: robotName,
-                    instructions: customInstructions,
-                    apiKey: userApiKey
+                    instructions: customInstructions
                 });
                 chatbotFrame.src = `/chat.html?${chatbotParams.toString()}`;
 
-                // Atualiza o código do widget (com API Key da sessão)
-                widgetCodeDisplay.innerHTML = `&lt;!-- LinkMágico Chatbot Widget --&gt;\n&lt;script&gt;\n    window.LinkMagicoWidgetConfig = {\n        robotName: "${robotName}",\n        salesUrl: "${salesUrl}",\n        instructions: "${customInstructions}",\n        primaryColor: "#3b82f6",\n        apiKey: "${userApiKey}"\n    };\n&lt;/script&gt;\n&lt;script src="/public/widget.js"&gt;&lt;/script&gt;`;
+                // Atualiza o código do widget
+                widgetCodeDisplay.innerHTML = `&lt;!-- LinkMágico Chatbot Widget --&gt;\n&lt;script&gt;\n    window.LinkMagicoWidgetConfig = {\n        robotName: "${robotName}",\n        salesUrl: "${salesUrl}",\n        instructions: "${customInstructions}",\n        primaryColor: "#3b82f6"\n    };\n&lt;/script&gt;\n&lt;script src="/public/widget.js"&gt;&lt;/script&gt;`;
 
                 successAlert.style.display = 'block';
                 showToast('Chatbot ativado com sucesso! Link gerado e pronto para compartilhar.', 'success');
@@ -1954,25 +1952,6 @@
                         </div>
                         <div id="leads-list" style="color:#94a3b8;">Carregando...</div>
                     </div>
-                    
-                    <!-- Seção de Backup -->
-                    <div style="background:#334155; padding:1.5rem; border-radius:12px;">
-                        <h3 style="color:#cbd5e1; margin-bottom:1rem;">🔐 Backup de Leads</h3>
-                        <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">Backups automáticos diários + backup manual sob demanda</p>
-                        
-                        <div style="display:flex; gap:1rem; margin-bottom:1.5rem;">
-                            <button onclick="createBackup()" style="background:#3b82f6; color:white; border:none; padding:0.75rem 1.5rem; border-radius:8px; cursor:pointer; font-weight:600; flex:1;">
-                                💾 Criar Backup Agora
-                            </button>
-                            <button onclick="loadBackups()" style="background:#8b5cf6; color:white; border:none; padding:0.75rem 1.5rem; border-radius:8px; cursor:pointer; font-weight:600; flex:1;">
-                                🔄 Atualizar Lista
-                            </button>
-                        </div>
-                        
-                        <div id="backups-list" style="max-height:300px; overflow-y:auto;">
-                            <p style="color:#94a3b8;">Carregando backups...</p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -2031,10 +2010,7 @@
             if (tabName === 'gmail') loadGmailStatus();
             if (tabName === 'whatsapp') loadWhatsAppStatus();
             if (tabName === 'chatgpt') loadChatGPTStatus();
-            if (tabName === 'leads') {
-                loadLeadsStats();
-                loadBackups(); // Carregar backups também
-            }
+            if (tabName === 'leads') loadLeadsStats();
         }
         
         async function loadAnalytics() {
@@ -2758,125 +2734,6 @@
             } catch (error) {
                 console.error('Erro ao exportar leads:', error);
                 showToast('❌ Erro ao exportar leads', 'error');
-            }
-        }
-        
-        // ===== FUNÇÕES DE BACKUP =====
-        async function createBackup() {
-            try {
-                showToast('💾 Criando backup...', 'info');
-                
-                const response = await fetch('/admin/leads/backup/create', {
-                    method: 'POST',
-                    headers: {
-                        'X-API-Key': 'linkmagico-api-key-2024',
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showToast('✅ Backup criado com sucesso!', 'success');
-                    loadBackups(); // Recarregar lista
-                } else {
-                    showToast('❌ Erro ao criar backup: ' + result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Erro ao criar backup:', error);
-                showToast('❌ Erro ao criar backup', 'error');
-            }
-        }
-        
-        async function loadBackups() {
-            try {
-                const response = await fetch('/admin/leads/backup/list', {
-                    headers: {
-                        'X-API-Key': 'linkmagico-api-key-2024'
-                    }
-                });
-                
-                const data = await response.json();
-                
-                const container = document.getElementById('backups-list');
-                
-                if (data.success && data.backups && data.backups.length > 0) {
-                    container.innerHTML = data.backups.map(backup => {
-                        const date = new Date(backup.timestamp);
-                        const dateStr = date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR');
-                        const sizeKB = (backup.size / 1024).toFixed(2);
-                        
-                        const typeLabels = {
-                            'manual': '👤 Manual',
-                            'daily': '⏰ Diário',
-                            'startup': '🚀 Startup',
-                            'shutdown': '🛑 Shutdown',
-                            'pre-restore': '⚠️ Pré-restauração'
-                        };
-                        
-                        const typeLabel = typeLabels[backup.type] || backup.type;
-                        
-                        return `
-                            <div style="background:#1e293b; padding:1rem; border-radius:8px; margin-bottom:0.75rem; border-left:4px solid #3b82f6;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                                    <div>
-                                        <div style="color:#cbd5e1; font-weight:600; margin-bottom:0.25rem;">${typeLabel}</div>
-                                        <div style="color:#94a3b8; font-size:0.85rem;">${dateStr}</div>
-                                    </div>
-                                    <div style="text-align:right;">
-                                        <div style="color:#60a5fa; font-weight:600;">${backup.leadsCount} leads</div>
-                                        <div style="color:#94a3b8; font-size:0.85rem;">${sizeKB} KB</div>
-                                    </div>
-                                </div>
-                                <button onclick="restoreBackup('${backup.filename}')" style="background:#10b981; color:white; border:none; padding:0.5rem 1rem; border-radius:6px; cursor:pointer; font-size:0.85rem; font-weight:600; width:100%;">
-                                    ♻️ Restaurar Este Backup
-                                </button>
-                            </div>
-                        `;
-                    }).join('');
-                    
-                    console.log(`📦 ${data.backups.length} backups carregados`);
-                } else {
-                    container.innerHTML = '<p style="color:#94a3b8;">Nenhum backup disponível ainda.</p>';
-                }
-            } catch (error) {
-                console.error('Erro ao carregar backups:', error);
-                document.getElementById('backups-list').innerHTML = '<p style="color:#ef4444;">Erro ao carregar backups</p>';
-            }
-        }
-        
-        async function restoreBackup(filename) {
-            if (!confirm(`⚠️ Tem certeza que deseja restaurar este backup?\n\nIsso irá substituir todos os leads atuais!\n\nUm backup do estado atual será criado antes da restauração.`)) {
-                return;
-            }
-            
-            try {
-                showToast('♻️ Restaurando backup...', 'info');
-                
-                const response = await fetch('/admin/leads/backup/restore', {
-                    method: 'POST',
-                    headers: {
-                        'X-API-Key': 'linkmagico-api-key-2024',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ filename })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showToast(`✅ Backup restaurado! ${result.leadsCount} leads recuperados.`, 'success');
-                    
-                    // Recarregar dados
-                    loadBackups();
-                    loadLeadsStats();
-                    loadDashboardLeads();
-                } else {
-                    showToast('❌ Erro ao restaurar backup: ' + result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Erro ao restaurar backup:', error);
-                showToast('❌ Erro ao restaurar backup', 'error');
             }
         }
         

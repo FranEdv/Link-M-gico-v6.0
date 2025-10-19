@@ -75,7 +75,7 @@ class StructuredLeadsManager {
                 )
             `;
 
-            await db.query(query);
+            await DatabaseHelpers.run(query);
             console.log('✅ Tabela structured_leads criada/verificada');
             return true;
         } catch (error) {
@@ -206,7 +206,7 @@ class StructuredLeadsManager {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `;
 
-            await db.query(query, [
+            await DatabaseHelpers.run(query, [
                 id,
                 chatbotId,
                 metadata.sessionId || null,
@@ -284,7 +284,7 @@ class StructuredLeadsManager {
                 params.push(filters.limit);
             }
 
-            const leads = await db.query(query, params);
+            const leads = await DatabaseHelpers.all(query, params);
 
             return {
                 success: true,
@@ -397,7 +397,7 @@ class StructuredLeadsManager {
                 WHERE id = ?
             `;
 
-            await db.query(query, [newStatus, leadId]);
+            await DatabaseHelpers.run(query, [newStatus, leadId]);
 
             console.log(`✅ Status do lead ${leadId} atualizado para ${newStatus}`);
 
@@ -429,7 +429,7 @@ class StructuredLeadsManager {
                 WHERE chatbot_id = ?
             `;
 
-            const stats = await db.query(query, [chatbotId]);
+            const stats = await DatabaseHelpers.get(query, [chatbotId]);
 
             return {
                 success: true,
@@ -464,7 +464,7 @@ class StructuredLeadsManager {
                 WHERE id = ?
             `;
 
-            await db.query(query, [
+            await DatabaseHelpers.run(query, [
                 `[${new Date().toLocaleString('pt-BR')}] ${note}`,
                 leadId
             ]);
