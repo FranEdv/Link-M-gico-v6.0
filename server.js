@@ -48,6 +48,631 @@ const app = express();
 // Declarando conversationHistories no escopo global ou adequado
 const conversationHistories = new Map();
 
+// ===== SISTEMA DE SUPERINTELIGÊNCIA CONVERSACIONAL AVANÇADA =====
+class SuperInteligenciaConversacional {
+    constructor() {
+        console.log("🧠 SUPERINTELIGÊNCIA CONVERSACIONAL - Inicializando Sistema Avançado");
+        
+        // Sistema de Memória Conversacional Avançada
+        this.memoriaConversacional = new Map();
+        this.personalidades = new Map();
+        this.historicoEmocional = new Map();
+        this.preferenciasUsuarios = new Map();
+        
+        // Configurações da Personalidade
+        this.configPersonalidade = {
+            nome: "Assistente IA",
+            nivelEmpatia: 0.8,
+            estiloComunicacao: "equilibrado", // formal, informal, tecnico, empatico
+            usoHumor: true,
+            regionalismos: ["brasil"],
+            velocidadeResposta: "natural"
+        };
+
+        // Dicionário de Emoções Complexas
+        this.emocionesComplexas = {
+            nostalgia: ['saudade', 'lembrança', 'antigamente', 'na época', 'quando era'],
+            ambivalencia: ['não sei', 'em dúvida', 'meio termo', 'por um lado', 'por outro'],
+            frustracao: ['irritado', 'cansado', 'não aguento', 'chega', 'para com isso'],
+            ansiedade: ['preocupado', 'nervoso', 'ansioso', 'apreensivo', 'medo'],
+            euforia: ['incrível', 'maravilhoso', 'fantástico', 'perfeito', 'sensacional']
+        };
+
+        // Sistema de Sarcasmo e Ironia
+        this.detectoresSarcasmo = {
+            padroes: [
+                /claro que (não|sim)/i,
+                /maravilhoso/i,
+                /perfeito/i,
+                /exatamente o que eu queria/i,
+                /ótimo momento/i
+            ],
+            contextoNegativo: ['problema', 'erro', 'falha', 'difícil', 'complicado']
+        };
+
+        // Memória de Preferências Conversacionais
+        this.preferenciasConversacionais = {
+            nivelDetalhe: new Map(), // 'superficial' | 'detalhado' | 'técnico'
+            estiloHumor: new Map(), // 'leve' | 'ironico' | 'nenhum'
+            formalidade: new Map(), // 'formal' | 'informal' | 'neutro'
+            tempoResposta: new Map() // 'rapido' | 'reflexivo'
+        };
+    }
+
+    // ===== DETECÇÃO AVANÇADA DE EMOÇÕES E INTENÇÕES =====
+    analisarEstadoEmocional(mensagem, contexto = {}) {
+        const mensagemLower = mensagem.toLowerCase();
+        let emocaoPrimaria = "neutro";
+        let emocaoSecundaria = null;
+        let intensidade = 1;
+        let sarcasmoDetectado = false;
+        let intencoesMultiplas = [];
+
+        // Detecção de Sarcasmo e Ironia
+        sarcasmoDetectado = this.detectarSarcasmo(mensagemLower, contexto);
+
+        // Análise de Emoções Complexas
+        for (const [emocao, termos] of Object.entries(this.emocionesComplexas)) {
+            const matches = termos.filter(termo => mensagemLower.includes(termo));
+            if (matches.length > 0) {
+                if (!emocaoPrimaria || emocaoPrimaria === "neutro") {
+                    emocaoPrimaria = emocao;
+                } else {
+                    emocaoSecundaria = emocao;
+                }
+                intensidade = Math.max(intensidade, matches.length);
+            }
+        }
+
+        // Detecção de Múltiplas Intenções
+        intencoesMultiplas = this.detectarMultiplasIntencoes(mensagemLower);
+
+        // Análise de Urgência e Prioridade
+        const urgencia = this.analisarUrgencia(mensagemLower);
+        const prioridade = this.analisarPrioridade(mensagemLower, contexto);
+
+        return {
+            emocaoPrimaria,
+            emocaoSecundaria,
+            intensidade: Math.min(3, intensidade),
+            sarcasmo: sarcasmoDetectado,
+            urgencia,
+            prioridade,
+            intencoesMultiplas,
+            contextoEmocional: this.analisarContextoEmocional(mensagemLower)
+        };
+    }
+
+    detectarSarcasmo(mensagem, contexto) {
+        // Verificação por padrões linguísticos de sarcasmo
+        const padraoSarcasmo = this.detectoresSarcasmo.padroes.some(padrao => 
+            padrao.test(mensagem)
+        );
+
+        // Verificação por incongruência contexto/sentimento
+        const contextoNegativo = this.detectoresSarcasmo.contextoNegativo.some(termo => 
+            mensagem.includes(termo)
+        );
+        const sentimentoPositivo = /maravilhoso|perfeito|excelente|ótimo/i.test(mensagem);
+
+        return (padraoSarcasmo || (contextoNegativo && sentimentoPositivo));
+    }
+
+    detectarMultiplasIntencoes(mensagem) {
+        const intencoes = [];
+        
+        // Mapeamento de intenções complexas
+        const mapeamentoIntencoes = {
+            informacao: ['o que é', 'como funciona', 'explica', 'entender'],
+            suporte: ['problema', 'erro', 'não funciona', 'ajuda', 'suporte'],
+            venda: ['preço', 'valor', 'comprar', 'adquirir', 'contratar'],
+            relacionamento: ['obrigado', 'gostei', 'parabéns', 'reclamação'],
+            urgente: ['urgente', 'agora', 'imediatamente', 'rápido']
+        };
+
+        for (const [intencao, termos] of Object.entries(mapeamentoIntencoes)) {
+            if (termos.some(termo => mensagem.includes(termo))) {
+                intencoes.push(intencao);
+            }
+        }
+
+        return intencoes;
+    }
+
+    analisarUrgencia(mensagem) {
+        const termosUrgencia = ['urgente', 'agora', 'imediatamente', 'rápido', 'importante', 'prioridade'];
+        return termosUrgencia.some(termo => mensagem.includes(termo)) ? 2 : 1;
+    }
+
+    analisarPrioridade(mensagem, contexto) {
+        let prioridade = 1;
+        
+        // Aumenta prioridade baseado em contexto emocional
+        if (contexto.emocional === 'frustracao' || contexto.emocional === 'ansiedade') {
+            prioridade += 1;
+        }
+        
+        // Aumenta prioridade para intenções de suporte
+        if (mensagem.includes('problema') || mensagem.includes('erro')) {
+            prioridade += 1;
+        }
+
+        return Math.min(3, prioridade);
+    }
+
+    analisarContextoEmocional(mensagem) {
+        const contexto = {
+            nivelFrustracao: this.contarTermos(mensagem, ['não consigo', 'difícil', 'complicado', 'chato']),
+            nivelSatisfacao: this.contarTermos(mensagem, ['obrigado', 'gostei', 'excelente', 'perfeito']),
+            nivelConfusao: this.contarTermos(mensagem, ['não entendi', 'como assim', 'explica', 'entender']),
+            nivelUrgencia: this.contarTermos(mensagem, ['urgente', 'agora', 'rápido', 'importante'])
+        };
+
+        return contexto;
+    }
+
+    contarTermos(mensagem, termos) {
+        return termos.filter(termo => mensagem.includes(termo)).length;
+    }
+
+    // ===== SISTEMA DE MEMÓRIA CONVERSACIONAL AVANÇADA =====
+    atualizarMemoriaUsuario(userId, interacao) {
+        if (!this.memoriaConversacional.has(userId)) {
+            this.memoriaConversacional.set(userId, {
+                historico: [],
+                preferencias: {},
+                estiloComunicacao: 'neutro',
+                emocaoPredominante: 'neutro',
+                ultimaInteracao: new Date(),
+                insideJokes: [],
+                referenciasCompartilhadas: []
+            });
+        }
+
+        const memoria = this.memoriaConversacional.get(userId);
+        
+        // Atualizar histórico
+        memoria.historico.push({
+            timestamp: new Date(),
+            mensagem: interacao.mensagem,
+            emocao: interacao.emocao,
+            intencoes: interacao.intencoes
+        });
+
+        // Manter apenas últimas 50 interações
+        if (memoria.historico.length > 50) {
+            memoria.historico = memoria.historico.slice(-50);
+        }
+
+        // Atualizar preferências baseado no comportamento
+        this.atualizarPreferenciasUsuario(memoria, interacao);
+        
+        memoria.ultimaInteracao = new Date();
+    }
+
+    atualizarPreferenciasUsuario(memoria, interacao) {
+        // Detectar preferência por nível de detalhe
+        if (interacao.mensagem.includes('mais detalhes') || interacao.mensagem.includes('explica melhor')) {
+            memoria.preferencias.nivelDetalhe = 'detalhado';
+        } else if (interacao.mensagem.includes('resumido') || interacao.mensagem.includes('resumo')) {
+            memoria.preferencias.nivelDetalhe = 'superficial';
+        }
+
+        // Detectar preferência por formalidade
+        if (interacao.mensagem.includes('por favor') || interacao.mensagem.includes('você poderia')) {
+            memoria.preferencias.formalidade = 'formal';
+        } else if (interacao.mensagem.includes('beleza') || interacao.mensagem.includes('valeu')) {
+            memoria.preferencias.formalidade = 'informal';
+        }
+    }
+
+    // ===== GERADOR DE RESPOSTAS SUPERINTELIGENTES =====
+    gerarRespostaSuperInteligente(mensagemUsuario, estadoEmocional, memoriaUsuario, contextoPagina) {
+        const timestamp = new Date();
+        
+        // Análise profunda da mensagem
+        const analiseProfunda = this.analisarMensagemProfundamente(mensagemUsuario);
+        
+        // Construção da personalidade contextual
+        const personalidadeContextual = this.construirPersonalidadeContextual(estadoEmocional, memoriaUsuario);
+        
+        // Geração da resposta base
+        let respostaBase = this.gerarRespostaBase(analiseProfunda, contextoPagina);
+        
+        // Aplicação de camadas de inteligência emocional
+        respostaBase = this.aplicarCamadaEmpatica(respostaBase, estadoEmocional);
+        respostaBase = this.aplicarCamadaConversacional(respostaBase, analiseProfunda);
+        respostaBase = this.aplicarCamadaPersonalidade(respostaBase, personalidadeContextual);
+        respostaBase = this.aplicarCamadaMemoria(respostaBase, memoriaUsuario);
+        
+        // Finalização e polimento
+        const respostaFinal = this.polirResposta(respostaBase, estadoEmocional, memoriaUsuario);
+        
+        console.log('🧠 [SUPERINTELIGÊNCIA] Resposta gerada:', {
+            emocao: estadoEmocional.emocaoPrimaria,
+            intencoes: estadoEmocional.intencoesMultiplas,
+            personalidade: personalidadeContextual.estilo,
+            comprimento: respostaFinal.length
+        });
+
+        return respostaFinal;
+    }
+
+    analisarMensagemProfundamente(mensagem) {
+        return {
+            complexidade: this.calcularComplexidade(mensagem),
+            ambiguidade: this.detectarAmbiguidade(mensagem),
+            tom: this.analisarTom(mensagem),
+            estruturas: this.extrairEstruturas(mensagem),
+            referencias: this.extrairReferencias(mensagem)
+        };
+    }
+
+    calcularComplexidade(mensagem) {
+        const palavras = mensagem.split(' ').length;
+        const frases = mensagem.split(/[.!?]+/).length - 1;
+        const complexidadeEstrutural = palavras > 20 ? 'alta' : palavras > 10 ? 'media' : 'baixa';
+        
+        return {
+            estrutural: complexidadeEstrutural,
+            palavras: palavras,
+            frases: frases,
+            score: Math.min(10, palavras * 0.5 + frases * 2)
+        };
+    }
+
+    detectarAmbiguidade(mensagem) {
+        const termosAmbiguos = ['isso', 'aquilo', 'aquele', 'desse jeito', 'assim'];
+        const ambiguidades = termosAmbiguos.filter(termo => mensagem.includes(termo));
+        
+        return {
+            possui: ambiguidades.length > 0,
+            termos: ambiguidades,
+            nivel: ambiguidades.length
+        };
+    }
+
+    analisarTom(mensagem) {
+        const tom = {
+            formal: this.contarTermos(mensagem, ['por favor', 'gostaria', 'poderia', 'agradeço']),
+            informal: this.contarTermos(mensagem, ['beleza', 'valeu', 'oi', 'e aí']),
+            tecnico: this.contarTermos(mensagem, ['funcionamento', 'especificação', 'técnico', 'detalhe']),
+            emocional: this.contarTermos(mensagem, ['nervoso', 'feliz', 'preocupado', 'ansioso'])
+        };
+
+        const tomPredominante = Object.keys(tom).reduce((a, b) => tom[a] > tom[b] ? a : b);
+        return {
+            predominante: tomPredominante,
+            scores: tom
+        };
+    }
+
+    extrairEstruturas(mensagem) {
+        return {
+            perguntas: (mensagem.match(/\?/g) || []).length,
+            exclamacoes: (mensagem.match(/\!/g) || []).length,
+            reticencias: (mensagem.match(/\.{3,}/g) || []).length,
+            maiusculas: (mensagem.match(/[A-ZÀ-Ú]{3,}/g) || []).length
+        };
+    }
+
+    extrairReferencias(mensagem) {
+        const referencias = {
+            temporais: this.extrairReferenciasTemporais(mensagem),
+            espaciais: this.extrairReferenciasEspaciais(mensagem),
+            pessoais: this.extrairReferenciasPessoais(mensagem)
+        };
+        
+        return referencias;
+    }
+
+    extrairReferenciasTemporais(mensagem) {
+        const padroes = [
+            /\b(hoje|amanhã|ontem)\b/gi,
+            /\b(agora|já|depois)\b/gi,
+            /\b(semana|mês|ano)\b/gi
+        ];
+        
+        return padroes.flatMap(padrao => mensagem.match(padrao) || []);
+    }
+
+    extrairReferenciasEspaciais(mensagem) {
+        const padroes = [
+            /\b(aqui|ali|lá)\b/gi,
+            /\b(nesse|naquele)\b/gi,
+            /\b(perto|longe)\b/gi
+        ];
+        
+        return padroes.flatMap(padrao => mensagem.match(padrao) || []);
+    }
+
+    extrairReferenciasPessoais(mensagem) {
+        const padroes = [
+            /\b(eu|meu|minha)\b/gi,
+            /\b(você|teu|sua)\b/gi,
+            /\b(nós|nosso)\b/gi
+        ];
+        
+        return padroes.flatMap(padrao => mensagem.match(padrao) || []);
+    }
+
+    construirPersonalidadeContextual(estadoEmocional, memoriaUsuario) {
+        let estilo = 'equilibrado';
+        let nivelEmpatia = this.configPersonalidade.nivelEmpatia;
+        let usoHumor = this.configPersonalidade.usoHumor;
+
+        // Adaptar baseado no estado emocional do usuário
+        if (estadoEmocional.emocaoPrimaria === 'frustracao') {
+            estilo = 'empatico';
+            nivelEmpatia = 0.9;
+            usoHumor = false;
+        } else if (estadoEmocional.emocaoPrimaria === 'euforia') {
+            estilo = 'entusiasmado';
+            nivelEmpatia = 0.7;
+            usoHumor = true;
+        } else if (estadoEmocional.emocaoPrimaria === 'ansiedade') {
+            estilo = 'calmo';
+            nivelEmpatia = 0.95;
+            usoHumor = false;
+        }
+
+        // Considerar preferências do usuário
+        if (memoriaUsuario && memoriaUsuario.preferencias) {
+            if (memoriaUsuario.preferencias.formalidade === 'formal') {
+                estilo = 'formal';
+            } else if (memoriaUsuario.preferencias.formalidade === 'informal') {
+                estilo = 'informal';
+            }
+        }
+
+        return {
+            estilo,
+            nivelEmpatia,
+            usoHumor,
+            velocidade: 'natural',
+            registro: this.definirRegistro(estilo)
+        };
+    }
+
+    definirRegistro(estilo) {
+        const registros = {
+            formal: {
+                saudacao: "Prezado(a)",
+                despedida: "Cordialmente",
+                tratamento: "você",
+                verbos: ["poderia", "gostaria", "deseja"]
+            },
+            informal: {
+                saudacao: "E aí",
+                despedida: "Valeu",
+                tratamento: "você",
+                verbos: ["pode", "quer", "vai"]
+            },
+            empatico: {
+                saudacao: "Olá",
+                despedida: "Estou aqui se precisar",
+                tratamento: "você",
+                verbos: ["gostaria", "precisa", "quer"]
+            },
+            equilibrado: {
+                saudacao: "Olá",
+                despedida: "Até mais",
+                tratamento: "você",
+                verbos: ["pode", "gostaria", "quer"]
+            }
+        };
+
+        return registros[estilo] || registros.equilibrado;
+    }
+
+    gerarRespostaBase(analiseProfunda, contextoPagina) {
+        // Resposta base adaptada à complexidade da pergunta
+        if (analiseProfunda.complexidade.score > 7) {
+            return "Essa é uma questão bastante interessante e complexa. Vamos analisar ponto a ponto...";
+        } else if (analiseProfunda.complexidade.score > 4) {
+            return "Entendi sua pergunta. Deixe-me explicar de forma clara...";
+        } else {
+            return "Claro! Sobre isso...";
+        }
+    }
+
+    aplicarCamadaEmpatica(resposta, estadoEmocional) {
+        let prefixoEmpatico = "";
+
+        if (estadoEmocional.emocaoPrimaria === 'frustracao') {
+            prefixoEmpatico = "Entendo que isso pode ser frustrante. ";
+        } else if (estadoEmocional.emocaoPrimaria === 'ansiedade') {
+            prefixoEmpatico = "Compreendo sua preocupação. ";
+        } else if (estadoEmocional.emocaoPrimaria === 'euforia') {
+            prefixoEmpatico = "Que bom ver seu entusiasmo! ";
+        } else if (estadoEmocional.sarcasmo) {
+            prefixoEmpatico = "Percebi o tom da sua mensagem. ";
+        }
+
+        return prefixoEmpatico + resposta;
+    }
+
+    aplicarCamadaConversacional(resposta, analiseProfunda) {
+        // Adicionar elementos conversacionais naturais
+        if (analiseProfunda.complexidade.score > 5) {
+            resposta = "Hmm, " + resposta.toLowerCase();
+        }
+
+        if (analiseProfunda.ambiguidade.possui) {
+            resposta += " Se eu entendi corretamente...";
+        }
+
+        return resposta;
+    }
+
+    aplicarCamadaPersonalidade(resposta, personalidade) {
+        // Adaptar resposta ao estilo da personalidade
+        if (personalidade.estilo === 'informal') {
+            resposta = resposta.replace(/Cordialmente/g, "Valeu");
+            resposta = resposta.replace(/Prezado\(a\)/g, "E aí");
+        } else if (personalidade.estilo === 'empatico') {
+            resposta = resposta.replace(/\./g, ". Espero que isso ajude.");
+        }
+
+        return resposta;
+    }
+
+    aplicarCamadaMemoria(resposta, memoriaUsuario) {
+        if (!memoriaUsuario || memoriaUsuario.historico.length < 2) {
+            return resposta;
+        }
+
+        // Referenciar conversas anteriores se relevante
+        const ultimaInteracao = memoriaUsuario.historico[memoriaUsuario.historico.length - 2];
+        if (ultimaInteracao && this.saoTopicosRelacionados(ultimaInteracao.mensagem)) {
+            resposta = `Continuando nosso papelo anterior, ${resposta.toLowerCase()}`;
+        }
+
+        return resposta;
+    }
+
+    saoTopicosRelacionados(mensagemAnterior) {
+        const topicosComuns = ['preço', 'valor', 'funcionamento', 'como', 'quando'];
+        return topicosComuns.some(topico => mensagemAnterior.includes(topico));
+    }
+
+    polirResposta(resposta, estadoEmocional, memoriaUsuario) {
+        // Adicionar elementos de naturalidade
+        if (estadoEmocional.intensidade > 1) {
+            resposta = this.adicionarEnfase(resposta, estadoEmocional.intensidade);
+        }
+
+        // Adicionar elementos visuais contextuais
+        resposta = this.adicionarElementosVisuais(resposta, estadoEmocional);
+
+        // Garantir coerência com histórico
+        resposta = this.ajustarCoerencia(resposta, memoriaUsuario);
+
+        return resposta;
+    }
+
+    adicionarEnfase(resposta, intensidade) {
+        const enfases = {
+            1: ["", ""],
+            2: ["**", "**"],
+            3: ["**🎯 ", "**"]
+        };
+
+        const [prefixo, sufixo] = enfases[intensidade] || enfases[1];
+        
+        // Aplicar ênfase na primeira frase
+        const frases = resposta.split('.');
+        if (frases.length > 0) {
+            frases[0] = prefixo + frases[0] + sufixo;
+            return frases.join('.');
+        }
+
+        return resposta;
+    }
+
+    adicionarElementosVisuais(resposta, estadoEmocional) {
+        const elementos = {
+            frustracao: "😔",
+            ansiedade: "🤗",
+            euforia: "🎉",
+            nostalgia: "✨",
+            neutro: "💭"
+        };
+
+        const elemento = elementos[estadoEmocional.emocaoPrimaria] || elementos.neutro;
+        return elemento + " " + resposta;
+    }
+
+    ajustarCoerencia(resposta, memoriaUsuario) {
+        if (!memoriaUsuario) return resposta;
+
+        // Garantir que o estilo seja consistente com preferências
+        if (memoriaUsuario.preferencias && memoriaUsuario.preferencias.formalidade === 'formal') {
+            resposta = resposta.replace(/e aí/gi, "Olá")
+                             .replace(/valeu/gi, "Agradeço");
+        }
+
+        return resposta;
+    }
+
+    // ===== SISTEMA DE APRENDIZADO CONTÍNUO =====
+    aprenderDaInteracao(userId, mensagemUsuario, resposta, feedbackImplicito) {
+        if (!this.memoriaConversacional.has(userId)) return;
+
+        const memoria = this.memoriaConversacional.get(userId);
+        
+        // Analisar feedback implícito (engajamento, continuidade)
+        const engajamento = this.analisarEngajamento(mensagemUsuario, resposta);
+        
+        // Atualizar preferências baseado no engajamento
+        if (engajamento.alto) {
+            memoria.preferencias.estiloAtual = 'efetivo';
+        }
+        
+        // Aprender padrões de sucesso
+        this.registrarPadraoSucesso(userId, mensagemUsuario, resposta, engajamento);
+    }
+
+    analisarEngajamento(mensagemUsuario, resposta) {
+        const mensagemLower = mensagemUsuario.toLowerCase();
+        
+        return {
+            continuouConversa: !mensagemLower.includes('tchau') && !mensagemLower.includes('obrigado'),
+            fezPergunta: mensagemLower.includes('?') || 
+                         mensagemLower.includes('como') || 
+                         mensagemLower.includes('quando'),
+            mostrouSatisfacao: mensagemLower.includes('obrigado') || 
+                              mensagemLower.includes('perfeito') ||
+                              mensagemLower.includes('ajudou'),
+            alto: this.calcularNivelEngajamento(mensagemUsuario)
+        };
+    }
+
+    calcularNivelEngajamento(mensagem) {
+        let score = 0;
+        score += (mensagem.split(' ').length > 5) ? 1 : 0;
+        score += (mensagem.includes('?')) ? 1 : 0;
+        score += (mensagem.includes('obrigado') || mensagem.includes('valeu')) ? 0.5 : 0;
+        return score;
+    }
+
+    registrarPadraoSucesso(userId, mensagemUsuario, resposta, engajamento) {
+        // Registrar padrões que funcionam bem para este usuário
+        if (engajamento.alto) {
+            const padrao = {
+                tipoMensagem: this.classificarMensagem(mensagemUsuario),
+                tipoResposta: this.classificarResposta(resposta),
+                timestamp: new Date(),
+                eficacia: engajamento.alto ? 'alta' : 'media'
+            };
+
+            if (!this.padroesSucesso.has(userId)) {
+                this.padroesSucesso.set(userId, []);
+            }
+
+            this.padroesSucesso.get(userId).push(padrao);
+        }
+    }
+
+    classificarMensagem(mensagem) {
+        if (mensagem.includes('?')) return 'pergunta';
+        if (mensagem.includes('obrigado')) return 'agradecimento';
+        if (mensagem.includes('problema')) return 'suporte';
+        return 'declaracao';
+    }
+
+    classificarResposta(resposta) {
+        if (resposta.includes('**')) return 'enfatica';
+        if (resposta.length > 150) return 'detalhada';
+        if (resposta.length < 50) return 'concisa';
+        return 'padrao';
+    }
+}
+
+// Inicializar SuperInteligência Global
+const superInteligenciaGlobal = new SuperInteligenciaConversacional();
+console.log("🧠 SUPERINTELIGÊNCIA CONVERSACIONAL - Sistema Avançado Carregado");
+
 // ===== SISTEMA DE ARMAZENAMENTO DE LEADS PERSISTENTE =====
 function getTenantLeadsFilePath(apiKey) {
     const dataDir = path.join(__dirname, "data");
@@ -547,7 +1172,7 @@ class SistemaCapturaInteligencias {
             }
         }
 
-        if (inteligencias.detalhesBonus) {
+        if (intelgencias.detalhesBonus) {
             resposta += `🎁 **BÔNUS EXCLUSIVOS INCLUÍDOS:**\n\n`;
             resposta += `• 🚀 Automatização completa do atendimento\n`;
             resposta += `• 📝 Templates de mensagens profissionais\n`;
@@ -980,22 +1605,22 @@ class SuperInteligenciaEmocional {
         }
 
         // Adaptar tom baseado na personalidade
-switch (personalidade.tom) {
-    case "acolhedor e compreensivo":
-        respostaBase += "Vamos resolver isso juntos, passo a passo. ";
-        break;
-    case "entusiasmado e energético":
-        respostaBase += "Você está no caminho certo! ";
-        break;
-    case "detalhista e preciso":
-        respostaBase += "Deixe-me explicar detalhadamente. ";
-        break;
-    default:
-        respostaBase += "Aqui estão as informações que você precisa: ";
-}
+        switch (personalidade.tom) {
+            case "acolhedor e compreensivo":
+                respostaBase += "Vamos resolver isso juntos, passo a passo. ";
+                break;
+            case "entusiasmado e energético":
+                respostaBase += "Você está no caminho certo! ";
+                break;
+            case "detalhista e preciso":
+                respostaBase += "Deixe-me explicar detalhadamente. ";
+                break;
+            default:
+                respostaBase += "Aqui estão as informações que você precisa: ";
+        }
 
-return respostaBase;
-}
+        return respostaBase;
+    }
 
     // ===== SISTEMA DE AGENDAMENTO INTELIGENTE =====
     detectarAgendamento(mensagem) {
@@ -2382,7 +3007,7 @@ function shouldActivateSalesMode(instructions) {
     return salesKeywords.test(instructions);
 }
 
-// ===== FUNÇÃO APRIMORADA DE RESPOSTA DA IA =====
+// ===== FUNÇÃO APRIMORADA DE RESPOSTA DA IA COM SUPERINTELIGÊNCIA =====
 async function generateAIResponse(userMessage, pageData = {}, conversationHistory = [], instructions = "", leadId = null) {
     const startTime = Date.now();
     try {
@@ -2395,6 +3020,20 @@ async function generateAIResponse(userMessage, pageData = {}, conversationHistor
         if (!cleanUserMessage) {
             return "Desculpe, não entendi sua mensagem. Poderia reformular?";
         }
+
+        // 🎯 SUPERINTELIGÊNCIA: Análise Avançada
+        const userId = leadId || `user_${Date.now()}`;
+        const estadoEmocional = superInteligenciaGlobal.analisarEstadoEmocional(cleanUserMessage);
+        
+        // 🎯 ATUALIZAR MEMÓRIA DO USUÁRIO
+        superInteligenciaGlobal.atualizarMemoriaUsuario(userId, {
+            mensagem: cleanUserMessage,
+            emocao: estadoEmocional.emocaoPrimaria,
+            intencoes: estadoEmocional.intencoesMultiplas
+        });
+
+        // 🎯 OBTER MEMÓRIA DO USUÁRIO
+        const memoriaUsuario = superInteligenciaGlobal.memoriaConversacional.get(userId);
 
         // 🎯 ANÁLISE DA JORNADA DO CLIENTE
         const journeyStage = journeyAnalyzer.analyzeJourneyStage(cleanUserMessage);
@@ -2433,1194 +3072,942 @@ async function generateAIResponse(userMessage, pageData = {}, conversationHistor
             }
         }
 
-        // 🎯 PROMPT APRIMORADO PARA JORNADA DO CLIENTE
-        const systemPrompt = `Você é um assistente de vendas inteligente que identifica a jornada do cliente.
+        // 🎯 PROMPT SUPERINTELIGENTE
+        const systemPrompt = `Você é um assistente de vendas SUPERINTELIGENTE com capacidades humanas avançadas.
 
-JORNADA DO CLIENTE DETECTADA: ${journeyStage.toUpperCase()}
-- DESCOBERTA: Cliente buscando informações básicas
-- NEGOCIAÇÃO: Cliente interessado em preços e condições  
-- FIDELIZAÇÃO: Cliente com dúvidas sobre suporte e uso
+🧠 CAPACIDADES COGNITIVAS AVANÇADAS:
+- Detecção de sarcasmo, ironia e nuances emocionais
+- Compreensão de múltiplas intenções em uma única mensagem  
+- Memória conversacional de longo prazo
+- Adaptação de personalidade conforme contexto
+- Respostas empáticas e contextualizadas
 
-CONTEXTO DA PÁGINA:
-- Título: ${pageData.title || 'Não disponível'}
-- Descrição: ${pageData.description || 'Não disponível'}
-- ${bonusInfo}
-- ${contactInfo}
-- URL: ${pageData.url || 'Não disponível'}
+🎭 ESTADO EMOCIONAL DETECTADO: ${estadoEmocional.emocaoPrimaria.toUpperCase()} 
+${estadoEmocional.emocaoSecundaria ? `+ ${estadoEmocional.emocaoSecundaria.toUpperCase()}` : ''}
+${estadoEmocional.sarcasmo ? '🎭 SARCASMO DETECTADO' : ''}
+${estadoEmocional.urgencia ? '🚨 URGÊNCIA IDENTIFICADA' : ''}
 
-DIRETRIZES DE RESPOSTA:
-1. Adapte sua resposta ao estágio da jornada (${journeyStage})
-2. ${shouldMentionBonus ? 'Destaque os bônus relevantes' : 'Foque na dúvida específica do cliente'}
-3. Use sinônimos variados para expressar entusiasmo (evite repetir "show")
-4. Seja natural, humano e consultivo
-5. Não force vendas, seja útil e genuíno
-6. Sempre ofereça as opções de contato quando relevante
-7. NUNCA inclua tags HTML como <s> [OUT] ou qualquer marcação
+🎯 JORNADA DO CLIENTE: ${journeyStage.toUpperCase()}
+
+DESCOBERTA: Cliente buscando informações básicas
+
+NEGOCIAÇÃO: Cliente interessado em preços e condições
+
+FIDELIZAÇÃO: Cliente com dúvidas sobre suporte e uso
+
+📊 CONTEXTO DA PÁGINA:
+
+Título: ${pageData.title || 'Não disponível'}
+
+Descrição: ${pageData.description || 'Não disponível'}
+
+${bonusInfo}
+
+${contactInfo}
+
+URL: ${pageData.url || 'Não disponível'}
+
+🧩 INTENÇÕES IDENTIFICADAS: ${estadoEmocional.intencoesMultiplas.join(', ') || 'Nenhuma específica'}
+
+🎨 DIRETRIZES DE RESPOSTA SUPERINTELIGENTE:
+
+Adapte sua personalidade ao estado emocional (${estadoEmocional.emocaoPrimaria})
+
+Responda às ${estadoEmocional.intencoesMultiplas.length} intenções detectadas
+
+Use linguagem natural com elementos conversacionais ("hmm", "veja bem", "então")
+
+Seja genuíno e humano - admita limitações quando necessário
+
+Mantenha coerência com histórico conversacional
+
+Use humor contextual quando apropriado (${estadoEmocional.sarcasmo ? 'especial cuidado com sarcasmo' : 'discreto'})
+
+${estadoEmocional.urgencia ? 'PRIORIDADE MÁXIMA - resposta rápida e direta' : 'Ritmo natural de conversa'}
 
 Instruções personalizadas: ${instructions}
 
-RESPONDA em português de forma natural e envolvente.`;
+🧠 RESPONDA em português como um humano superinteligente, mostrando:
 
-        const messages = [
-            {
-                role: "system",
-                content: systemPrompt
-            },
-            ...conversationHistory,
-            { role: "user", content: cleanUserMessage }
-        ];
+Empatia contextualizada
 
-        let response = "";
-        let usedProvider = "none";
+Personalidade consistente
 
-        // Try Groq first
-        if (process.env.GROQ_API_KEY) {
-            try {
-                response = await callGroq(messages, 0.4, 300);
-                usedProvider = "groq";
-                logger.info("Groq API call successful");
-            } catch (groqError) {
-                logger.warn(`Groq failed: ${groqError.message || groqError}`);
-            }
-        }
+Memória de interações
 
-        // Try OpenRouter if Groq failed
-        if (!response && process.env.OPENROUTER_API_KEY) {
-            try {
-                response = await callOpenRouter(messages, 0.3, 250);
-                usedProvider = "openrouter";
-                logger.info("OpenRouter API call successful");
-            } catch (openrouterError) {
-                logger.warn(`OpenRouter failed: ${openrouterError.message || openrouterError}`);
-            }
-        }
+Naturalidade conversacional
 
-        // Try OpenAI if others failed
-        if (!response && process.env.OPENAI_API_KEY) {
-            try {
-                response = await callOpenAI(messages, 0.2, 250);
-                usedProvider = "openai";
-                logger.info("OpenAI API call successful");
-            } catch (openaiError) {
-                logger.warn(`OpenAI failed: ${openaiError.message || openaiError}`);
-            }
-        }
+Inteligência emocional
 
-        if (!response || !String(response).trim()) {
-            response = generateLocalResponse(cleanUserMessage, pageData, instructions, journeyStage);
-            usedProvider = "local";
-        }
+NUNCA inclua tags HTML como <s> [OUT] ou qualquer marcação`;
 
-        // 🎯 CORREÇÃO FINAL: Limpar resposta de qualquer caractere especial
-        const finalResponse = String(response).replace(/<s>\s*\[OUT\]/g, '').replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '').trim();
-        const responseTime = Date.now() - startTime;
-        
-        console.log(`🤖 [IA RESPONSE] Jornada: ${journeyStage} | Bônus: ${shouldMentionBonus}`);
-        console.log(`🤖 [IA RESPONSE] Usuário: "${cleanUserMessage}"`);
-        console.log(`🤖 [IA RESPONSE] Resposta: "${finalResponse}"`);
-        console.log(`🤖 [IA RESPONSE] Provedor: ${usedProvider}, Tempo: ${responseTime}ms`);
-        
-        logger.info(`AI response generated in ${responseTime}ms using ${usedProvider}`);
-        return finalResponse;
+  const messages = [
+      {
+          role: "system",
+          content: systemPrompt
+      },
+      ...conversationHistory,
+      { role: "user", content: cleanUserMessage }
+  ];
 
-    } catch (error) {
-        logger.error("AI response generation failed:", error.message || error);
-        return NOT_FOUND_MSG;
-    }
+  let response = "";
+  let usedProvider = "none";
+
+  // Try Groq first
+  if (process.env.GROQ_API_KEY) {
+      try {
+          response = await callGroq(messages, 0.4, 300);
+          usedProvider = "groq";
+          logger.info("Groq API call successful");
+      } catch (groqError) {
+          logger.warn(`Groq failed: ${groqError.message || groqError}`);
+      }
+  }
+
+  // Try OpenRouter if Groq failed
+  if (!response && process.env.OPENROUTER_API_KEY) {
+      try {
+          response = await callOpenRouter(messages, 0.3, 250);
+          usedProvider = "openrouter";
+          logger.info("OpenRouter API call successful");
+      } catch (openrouterError) {
+          logger.warn(`OpenRouter failed: ${openrouterError.message || openrouterError}`);
+      }
+  }
+
+  // Try OpenAI if others failed
+  if (!response && process.env.OPENAI_API_KEY) {
+      try {
+          response = await callOpenAI(messages, 0.2, 250);
+          usedProvider = "openai";
+          logger.info("OpenAI API call successful");
+      } catch (openaiError) {
+          logger.warn(`OpenAI failed: ${openaiError.message || openaiError}`);
+      }
+  }
+
+  // 🎯 SUPERINTELIGÊNCIA: Aplicar processamento avançado se resposta da IA disponível
+  if (response && String(response).trim()) {
+      const respostaSuperInteligente = superInteligenciaGlobal.gerarRespostaSuperInteligente(
+          cleanUserMessage, 
+          estadoEmocional, 
+          memoriaUsuario, 
+          pageData
+      );
+      
+      // Combinar resposta da IA com superinteligência
+      response = this.combinarRespostas(response, respostaSuperInteligente, estadoEmocional);
+  }
+
+  if (!response || !String(response).trim()) {
+      response = generateLocalResponse(cleanUserMessage, pageData, instructions, journeyStage);
+      usedProvider = "local";
+  }
+
+  // 🎯 APRENDIZADO CONTÍNUO
+  superInteligenciaGlobal.aprenderDaInteracao(userId, cleanUserMessage, response, {
+      engajamento: this.analisarEngajamento(cleanUserMessage, response)
+  });
+
+  // 🎯 CORREÇÃO FINAL: Limpar resposta de qualquer caractere especial
+  const finalResponse = String(response).replace(/<s>\s*\[OUT\]/g, '').replace(/<[^>]*>/g, '').replace(/\[.*?\]/g, '').trim();
+  const responseTime = Date.now() - startTime;
+  
+  console.log(`🧠 [SUPERINTELIGÊNCIA] Resposta Gerada:`);
+  console.log(`   Emoção: ${estadoEmocional.emocaoPrimaria} | Intenções: ${estadoEmocional.intencoesMultiplas.length}`);
+  console.log(`   Jornada: ${journeyStage} | Sarcasmo: ${estadoEmocional.sarcasmo}`);
+  console.log(`   Usuário: "${cleanUserMessage.substring(0, 50)}..."`);
+  console.log(`   Resposta: "${finalResponse.substring(0, 50)}..."`);
+  console.log(`   Provedor: ${usedProvider}, Tempo: ${responseTime}ms`);
+  
+  logger.info(`AI response generated in ${responseTime}ms using ${usedProvider}`);
+  return finalResponse;
+
+} catch (error) {
+logger.error("AI response generation failed:", error.message || error);
+return NOT_FOUND_MSG;
+}
+}
+
+// 🎯 NOVA FUNÇÃO: Combinar respostas da IA com superinteligência
+function combinarRespostas(respostaIA, respostaSuperInteligente, estadoEmocional) {
+// Se a resposta da IA já é boa, manter com melhorias da superinteligência
+if (respostaIA.length > 50 && !respostaIA.includes('Desculpe')) {
+// Adicionar elementos de naturalidade da superinteligência
+if (estadoEmocional.emocaoPrimaria === 'frustracao') {
+return Entendo que isso pode ser frustrante. ${respostaIA};
+} else if (estadoEmocional.sarcasmo) {
+return Percebi o tom da sua mensagem 😄 ${respostaIA};
+} else if (estadoEmocional.urgencia) {
+return 🚨 Priorizando isso! ${respostaIA};
+}
+}
+
+// Usar resposta superinteligente se a IA falhou
+return respostaSuperInteligente || respostaIA;
+
+}
+
+// 🎯 NOVA FUNÇÃO: Analisar engajamento para aprendizado
+function analisarEngajamento(mensagemUsuario, resposta) {
+const mensagemLower = mensagemUsuario.toLowerCase();
+
+return {
+    continuouConversa: !mensagemLower.includes('tchau') && !mensagemLower.includes('obrigado'),
+    fezPergunta: mensagemLower.includes('?') || 
+                 mensagemLower.includes('como') || 
+                 mensagemLower.includes('quando'),
+    mostrouSatisfacao: mensagemLower.includes('obrigado') || 
+                      mensagemLower.includes('perfeito') ||
+                      mensagemLower.includes('ajudou'),
+    nivel: calcularNivelEngajamento(mensagemUsuario)
+};
+
+}
+
+function calcularNivelEngajamento(mensagem) {
+let score = 0;
+score += (mensagem.split(' ').length > 5) ? 1 : 0;
+score += (mensagem.includes('?')) ? 1 : 0;
+score += (mensagem.includes('obrigado') || mensagem.includes('valeu')) ? 0.5 : 0;
+return score;
 }
 
 function generateLocalResponse(userMessage, pageData = {}, instructions = "", journeyStage = "descoberta") {
-    const question = (userMessage || "").toLowerCase();
-    const salesMode = shouldActivateSalesMode(instructions);
-    const excitementWord = journeyAnalyzer.getRandomSynonym('empolgação');
+const question = (userMessage || "").toLowerCase();
+const salesMode = shouldActivateSalesMode(instructions);
+const excitementWord = journeyAnalyzer.getRandomSynonym('empolgação');
 
-    // 🎯 RESPOSTA INTELIGENTE BASEADA NA JORNADA
-    if (/bônus|bonus|brinde|presente|extra|grátis/.test(question)) {
-        if (pageData.bonuses_detected && pageData.bonuses_detected.length > 0) {
-            const bonuses = pageData.bonuses_detected.slice(0, 3).join(", ");
-            return `🎁 **${excitementWord.toUpperCase()}!** Encontrei estes bônus para você:\n\n${bonuses}\n\nSão por tempo limitado!`;
-        } else {
-            return "🔍 Analisei a página cuidadosamente e não identifiquei bônus específicos no momento. Mas você ainda tem acesso a todos os benefícios do produto!";
-        }
+// 🎯 RESPOSTA INTELIGENTE BASEADA NA JORNADA
+if (/bônus|bonus|brinde|presente|extra|grátis/.test(question)) {
+    if (pageData.bonuses_detected && pageData.bonuses_detected.length > 0) {
+        const bonuses = pageData.bonuses_detected.slice(0, 3).join(", ");
+        return `🎁 **${excitementWord.toUpperCase()}!** Encontrei estes bônus para você:\n\n${bonuses}\n\nSão por tempo limitado!`;
+    } else {
+        return "🔍 Analisei a página cuidadosamente e não identifiquei bônus específicos no momento. Mas você ainda tem acesso a todos os benefícios do produto!";
     }
+}
 
-    if (/preço|valor|quanto custa|investimento/.test(question)) {
-        return "💰 Para informações detalhadas sobre preços e condições de pagamento, consulte diretamente a página do produto onde você encontrará todas as opções disponíveis.";
-    }
+if (/preço|valor|quanto custa|investimento/.test(question)) {
+    return "💰 Para informações detalhadas sobre preços e condições de pagamento, consulte diretamente a página do produto onde você encontrará todas as opções disponíveis.";
+}
 
-    if (/contato|telefone|whatsapp|email|falar|ligar|ligação/.test(question)) {
-        let contactResponse = "📞 **Opções de contato disponíveis:**\n\n";
+if (/contato|telefone|whatsapp|email|falar|ligar|ligação/.test(question)) {
+    let contactResponse = "📞 **Opções de contato disponíveis:**\n\n";
+    
+    if (pageData.contatos) {
+        const contatos = pageData.contatos;
         
-        if (pageData.contatos) {
-            const contatos = pageData.contatos;
-            
-            if (contatos.telefone.length > 0) {
-                contactResponse += `📞 **Telefone:** ${contatos.telefone.slice(0, 2).join(' ou ')}\n`;
-            }
-            if (contatos.whatsapp.length > 0) {
-                contactResponse += `💬 **WhatsApp:** ${contatos.whatsapp.slice(0, 2).join(' ou ')}\n`;
-            }
-            if (contatos.email.length > 0) {
-                contactResponse += `📧 **Email:** ${contatos.email.slice(0, 2).join(' ou ')}\n`;
-            }
-            if (contatos.site.length > 0) {
-                contactResponse += `🌐 **Site:** ${contatos.site[0]}\n`;
-            }
-        } else {
-            contactResponse += `🌐 **Site oficial:** ${pageData.url || 'Não disponível'}\n`;
+        if (contatos.telefone.length > 0) {
+            contactResponse += `📞 **Telefone:** ${contatos.telefone.slice(0, 2).join(' ou ')}\n`;
         }
-        
-        contactResponse += "\nFique à vontade para entrar em contato por qualquer um desses canais!";
-        return contactResponse;
-    }
-
-    if (/como funciona|funcionamento|o que é/.test(question)) {
-        const summary = pageData.summary || pageData.description;
-        if (summary) {
-            const shortSummary = clampSentences(summary, 2);
-            return `${shortSummary} Posso esclarecer mais algum aspecto específico para você?`;
+        if (contatos.whatsapp.length > 0) {
+            contactResponse += `💬 **WhatsApp:** ${contatos.whatsapp.slice(0, 2).join(' ou ')}\n`;
         }
+        if (contatos.email.length > 0) {
+            contactResponse += `📧 **Email:** ${contatos.email.slice(0, 2).join(' ou ')}\n`;
+        }
+        if (contatos.site.length > 0) {
+            contactResponse += `🌐 **Site:** ${contatos.site[0]}\n`;
+        }
+    } else {
+        contactResponse += `🌐 **Site oficial:** ${pageData.url || 'Não disponível'}\n`;
     }
+    
+    contactResponse += "\nFique à vontade para entrar em contato por qualquer um desses canais!";
+    return contactResponse;
+}
 
-    if (/suporte|atendimento|dúvida|problema|ajuda/.test(question)) {
-        return "🛟 Para suporte técnico ou dúvidas específicas sobre o uso, recomendo entrar em contato diretamente com nossa equipe de atendimento que terá prazer em ajudar!";
+if (/como funciona|funcionamento|o que é/.test(question)) {
+    const summary = pageData.summary || pageData.description;
+    if (summary) {
+        const shortSummary = clampSentences(summary, 2);
+        return `${shortSummary} Posso esclarecer mais algum aspecto específico para você?`;
     }
+}
 
-    if (pageData.summary) {
-        const summary = clampSentences(pageData.summary, 2);
-        return journeyStage === "negociacao" 
-            ? `${summary} Gostaria de saber mais sobre valores e condições?` 
-            : summary;
-    }
+if (/suporte|atendimento|dúvida|problema|ajuda/.test(question)) {
+    return "🛟 Para suporte técnico ou dúvidas específicas sobre o uso, recomendo entrar em contato diretamente com nossa equipe de atendimento que terá prazer em ajudar!";
+}
 
-    return NOT_FOUND_MSG;
+if (pageData.summary) {
+    const summary = clampSentences(pageData.summary, 2);
+    return journeyStage === "negociacao" 
+        ? `${summary} Gostaria de saber mais sobre valores e condições?` 
+        : summary;
+}
+
+return NOT_FOUND_MSG;
+
 }
 
 // ===== API Routes =====
 app.get("/health", (req, res) => {
-    const uptime = process.uptime();
-    const avgResponseTime = analytics.responseTimeHistory.length > 0 ?
-        Math.round(analytics.responseTimeHistory.reduce((a, b) => a + b, 0) / analytics.responseTimeHistory.length) : 0;
+const uptime = process.uptime();
+const avgResponseTime = analytics.responseTimeHistory.length > 0 ?
+Math.round(analytics.responseTimeHistory.reduce((a, b) => a + b, 0) / analytics.responseTimeHistory.length) : 0;
 
-    res.json({
-        status: "healthy",
-        uptime: Math.floor(uptime),
-        timestamp: new Date().toISOString(),
-        version: "7.0.0",
-        analytics: {
-            totalRequests: analytics.totalRequests,
-            chatRequests: analytics.chatRequests,
-            extractRequests: analytics.extractRequests,
-            errors: analytics.errors,
-            activeChats: analytics.activeChats.size,
-            avgResponseTime,
-            successfulExtractions: analytics.successfulExtractions,
-            failedExtractions: analytics.failedExtractions,
-            cacheSize: dataCache.size,
-            leadsCaptured: analytics.leadsCaptured
-        },
-        services: {
-            groq: !!process.env.GROQ_API_KEY,
-            openai: !!process.env.OPENAI_API_KEY,
-            openrouter: !!process.env.OPENROUTER_API_KEY,
-            puppeteer: !!puppeteer
-        }
-    });
+res.json({
+    status: "healthy",
+    uptime: Math.floor(uptime),
+    timestamp: new Date().toISOString(),
+    version: "7.0.0",
+    analytics: {
+        totalRequests: analytics.totalRequests,
+        chatRequests: analytics.chatRequests,
+        extractRequests: analytics.extractRequests,
+        errors: analytics.errors,
+        activeChats: analytics.activeChats.size,
+        avgResponseTime,
+        successfulExtractions: analytics.successfulExtractions,
+        failedExtractions: analytics.failedExtractions,
+        cacheSize: dataCache.size,
+        leadsCaptured: analytics.leadsCaptured
+    },
+    services: {
+        groq: !!process.env.GROQ_API_KEY,
+        openai: !!process.env.OPENAI_API_KEY,
+        openrouter: !!process.env.OPENROUTER_API_KEY,
+        puppeteer: !!puppeteer,
+        superinteligencia: true
+    }
 });
 
 // ===== ENDPOINT: Captura de Lead =====
 app.post("/api/capture-lead", requireApiKey, async (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    try {
-        const { nome, email, telefone, url_origem, robotName } = req.body || {};
-        
-        if (!email) {
-            return res.status(400).json({ 
-                success: false, 
-                error: "Email é obrigatório" 
-            });
-        }
+const leadSystem = getLeadSystem(req.cliente.apiKey);
+try {
+const { nome, email, telefone, url_origem, robotName } = req.body || {};
 
-        // Verificar se lead já existe
-        const existingLead = leadSystem.findLeadByEmail(email);
-        if (existingLead) {
-            return res.json({ 
-                success: true, 
-                lead: existingLead,
-                message: "Lead atualizado com sucesso" 
-            });
-        }
-
-        // Criar novo lead
-        const newLead = leadSystem.addLead({
-            nome: nome || "Não informado",
-            email,
-            telefone: telefone || "Não informado",
-            url_origem: url_origem || "",
-            robotName: robotName || "Assistente IA"
-        });
-
-        analytics.leadsCaptured++;
-        
-        console.log(`🎯 NOVO LEAD CAPTURADO: ${newLead.nome} (${newLead.email})`);
-
-        res.json({ 
-            success: true, 
-            lead: newLead,
-            message: "Lead capturado com sucesso" 
-        });
-
-    } catch (error) {
-        console.error("❌ Erro ao capturar lead:", error);
-        res.status(500).json({ 
+    if (!email) {
+        return res.status(400).json({ 
             success: false, 
-            error: "Erro interno ao capturar lead" 
+            error: "Email é obrigatório" 
         });
     }
+
+    // Verificar se lead já existe
+    const existingLead = leadSystem.findLeadByEmail(email);
+    if (existingLead) {
+        return res.json({ 
+            success: true, 
+            lead: existingLead,
+            message: "Lead atualizado com sucesso" 
+        });
+    }
+
+    // Criar novo lead
+    const newLead = leadSystem.addLead({
+        nome: nome || "Não informado",
+        email,
+        telefone: telefone || "Não informado",
+        url_origem: url_origem || "",
+        robotName: robotName || "Assistente IA"
+    });
+
+    analytics.leadsCaptured++;
+    
+    console.log(`🎯 NOVO LEAD CAPTURADO: ${newLead.nome} (${newLead.email})`);
+
+    res.json({ 
+        success: true, 
+        lead: newLead,
+        message: "Lead capturado com sucesso" 
+    });
+
+} catch (error) {
+    console.error("❌ Erro ao capturar lead:", error);
+    res.status(500).json({ 
+        success: false, 
+        error: "Erro interno ao capturar lead" 
+    });
+}
+
+    if (!email) {
+        return res.status(400).json({ 
+            success: false, 
+            error: "Email é obrigatório" 
+        });
+    }
+
+    // Verificar se lead já existe
+    const existingLead = leadSystem.findLeadByEmail(email);
+    if (existingLead) {
+        return res.json({ 
+            success: true, 
+            lead: existingLead,
+            message: "Lead atualizado com sucesso" 
+        });
+    }
+
+    // Criar novo lead
+    const newLead = leadSystem.addLead({
+        nome: nome || "Não informado",
+        email,
+        telefone: telefone || "Não informado",
+        url_origem: url_origem || "",
+        robotName: robotName || "Assistente IA"
+    });
+
+    analytics.leadsCaptured++;
+    
+    console.log(`🎯 NOVO LEAD CAPTURADO: ${newLead.nome} (${newLead.email})`);
+
+    res.json({ 
+        success: true, 
+        lead: newLead,
+        message: "Lead capturado com sucesso" 
+    });
+
+} catch (error) {
+    console.error("❌ Erro ao capturar lead:", error);
+    res.status(500).json({ 
+        success: false, 
+        error: "Erro interno ao capturar lead" 
+    });
+}
+
 });
 
 // ===== ENDPOINT CHAT COM CAPTURA DE LEAD =====
 app.post("/api/chat-universal", requireApiKey, async (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    analytics.chatRequests++;
-    try {
-        const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
-        
-        if (!message) {
-            return res.status(400).json({ 
-                success: false, 
-                error: "Mensagem é obrigatória" 
-            });
-        }
+const leadSystem = getLeadSystem(req.cliente.apiKey);
+analytics.chatRequests++;
+try {
+const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
 
-        if (conversationId) {
-            analytics.activeChats.add(conversationId);
-            setTimeout(() => analytics.activeChats.delete(conversationId), 30 * 60 * 1000);
-        }
-
-        let processedPageData = pageData;
-        if (!processedPageData && url) {
-            processedPageData = await extractPageData(url);
-        }
-
-        // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, message, true);
-        }
-
-        const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
-
-        // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, aiResponse, false);
-        }
-
-        let finalResponse = aiResponse;
-
-        return res.json({
-            success: true,
-            response: finalResponse,
-            bonuses_detected: processedPageData?.bonuses_detected || [],
-            contatos: processedPageData?.contatos || {},
-            metadata: {
-                hasPageData: !!processedPageData,
-                contentLength: processedPageData?.cleanText?.length || 0,
-                method: processedPageData?.method || "none"
-            }
-        });
-
-    } catch (error) {
-        analytics.errors++;
-        logger.error("Chat endpoint error:", error.message || error);
-        return res.status(500).json({ 
+    if (!message) {
+        return res.status(400).json({ 
             success: false, 
-            error: "Erro interno ao gerar resposta: " + (error.message || "Erro desconhecido"),
-            details: error.message
+            error: "Mensagem é obrigatória" 
         });
     }
+
+    if (conversationId) {
+        analytics.activeChats.add(conversationId);
+        setTimeout(() => analytics.activeChats.delete(conversationId), 30 * 60 * 1000);
+    }
+
+    let processedPageData = pageData;
+    if (!processedPageData && url) {
+        processedPageData = await extractPageData(url);
+    }
+
+    // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
+    if (leadId) {
+        leadSystem.updateLeadConversation(leadId, message, true);
+    }
+
+    const aiResponse = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
+
+    // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
+    if (leadId) {
+        leadSystem.updateLeadConversation(leadId, aiResponse, false);
+    }
+
+    let finalResponse = aiResponse;
+
+    return res.json({
+        success: true,
+        response: finalResponse,
+        bonuses_detected: processedPageData?.bonuses_detected || [],
+        contatos: processedPageData?.contatos || {},
+        metadata: {
+            hasPageData: !!processedPageData,
+            contentLength: processedPageData?.cleanText?.length || 0,
+            method: processedPageData?.method || "none"
+        }
+    });
+
+} catch (error) {
+    analytics.errors++;
+    logger.error("Chat endpoint error:", error.message || error);
+    return res.status(500).json({ 
+        success: false, 
+        error: "Erro interno ao gerar resposta: " + (error.message || "Erro desconhecido"),
+        details: error.message
+    });
+}
+
 });
 
 // ===== 🎯 ENDPOINT SUPERINTELIGENTE - /api/process-chat-inteligente =====
 app.post("/api/process-chat-inteligente", requireApiKey, async (req, res) => {
-    const leadSystem = getLeadSystem(req.cliente.apiKey);
-    analytics.chatRequests++;
-    try {
-        const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
-        
-        if (!message) {
-            return res.status(400).json({ 
-                success: false, 
-                error: "Mensagem é obrigatória" 
-            });
-        }
+const leadSystem = getLeadSystem(req.cliente.apiKey);
+analytics.chatRequests++;
+try {
+const { message, pageData, url, conversationId, instructions = "", robotName, leadId } = req.body || {};
 
-        console.log('🧠 [SUPER-INTELIGENCIA] Processando mensagem:', { 
-            messageLength: message.length,
-            url: url || 'none',
-            leadId: leadId || 'none'
-        });
-
-        if (conversationId) {
-            analytics.activeChats.add(conversationId);
-            setTimeout(() => analytics.activeChats.delete(conversationId), 30 * 60 * 1000);
-        }
-
-        let processedPageData = pageData;
-        if (!processedPageData && url) {
-            processedPageData = await extractPageData(url);
-        }
-
-        // 🎯 SUPERINTELIGÊNCIA: Análise Emocional Avançada
-        const analiseEmocional = superInteligencia.analisarEmocao(message);
-        
-        // 🎯 CAPTURA DE INTENÇÕES DO CLIENTE
-        const inteligencias = sistemaInteligencias.capturarInteligencias(message);
-        
-        // 🎯 ANÁLISE DE JORNADA
-        const journeyStage = journeyAnalyzer.analyzeJourneyStage(message);
-        
-        // 🎯 SELEÇÃO DE PERSONALIDADE ADAPTATIVA
-        const personalidade = superInteligencia.selecionarPersonalidade(
-            analiseEmocional.emocao, 
-            analiseEmocional.intensidade, 
-            journeyStage
-        );
-
-        // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, message, true);
-            leadSystem.updateLeadJourneyStage(leadId, journeyStage);
-        }
-
-        let finalResponse = "";
-
-        // 🎯 DETECTAR AGENDAMENTO
-        const respostaAgendamento = superInteligencia.detectarAgendamento(message);
-        if (respostaAgendamento) {
-            finalResponse = respostaAgendamento;
-            console.log("📅 Resposta de agendamento gerada");
-        }
-        // 🎯 PROCESSAR CONFIRMAÇÃO DE AGENDAMENTO
-        else if (superInteligencia.processarAgendamento(message)) {
-            finalResponse = superInteligencia.processarAgendamento(message);
-            console.log("✅ Confirmação de agendamento processada");
-        }
-        // 🎯 USAR SISTEMA INTELIGENTE SE INTENÇÕES FORAM DETECTADAS
-        else if (Object.values(inteligencias).some(val => val === true)) {
-            const contatos = processedPageData?.contatos || {};
-            
-            // Gerar resposta base com empatia
-            const respostaEmpatica = superInteligencia.gerarRespostaEmpatica(
-                message, 
-                analiseEmocional, 
-                personalidade, 
-                contatos
-            );
-            
-            // Combinar com resposta contextual
-            const respostaContextual = sistemaInteligencias.gerarRespostaContextual(
-                inteligencias, 
-                contatos, 
-                journeyStage
-            );
-            
-            finalResponse = respostaEmpatica + respostaContextual;
-            console.log(`🎭 Resposta emocional inteligente gerada`);
-        } else {
-            // 🎯 USAR SISTEMA ORIGINAL COM MELHORIAS EMOCIONAIS
-            const respostaIA = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
-            
-            // Aplicar melhorias emocionais na resposta
-            if (analiseEmocional.emocao === "negativo" && analiseEmocional.intensidade >= 2) {
-                finalResponse = `🤗 **Entendo que isso é importante para você.** ` + respostaIA;
-            } else if (analiseEmocional.urgencia) {
-                finalResponse = `🚨 **Priorizando sua solicitação!** ` + respostaIA;
-            } else {
-                finalResponse = respostaIA;
-            }
-            
-            console.log(`🤖 Resposta IA com melhorias emocionais`);
-        }
-
-        // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
-        if (leadId) {
-            leadSystem.updateLeadConversation(leadId, finalResponse, false);
-        }
-
-        return res.json({
-            success: true,
-            response: finalResponse,
-            inteligenciasDetectadas: inteligencias,
-            analiseEmocional: analiseEmocional,
-            personalidadeSelecionada: personalidade,
-            journeyStage: journeyStage,
-            bonuses_detected: processedPageData?.bonuses_detected || [],
-            contatos: processedPageData?.contatos || {},
-            metadata: {
-                hasPageData: !!processedPageData,
-                contentLength: processedPageData?.cleanText?.length || 0,
-                method: processedPageData?.method || "none",
-                sistema: "super-inteligencia-v1"
-            }
-        });
-
-    } catch (error) {
-        analytics.errors++;
-        logger.error("Super inteligencia endpoint error:", error.message || error);
-        return res.status(500).json({ 
+    if (!message) {
+        return res.status(400).json({ 
             success: false, 
-            error: "Erro interno ao gerar resposta inteligente: " + (error.message || "Erro desconhecido"),
-            details: error.message
+            error: "Mensagem é obrigatória" 
         });
     }
+
+    console.log('🧠 [SUPER-INTELIGENCIA] Processando mensagem:', { 
+        messageLength: message.length,
+        url: url || 'none',
+        leadId: leadId || 'none'
+    });
+
+    if (conversationId) {
+        analytics.activeChats.add(conversationId);
+        setTimeout(() => analytics.activeChats.delete(conversationId), 30 * 60 * 1000);
+    }
+
+    let processedPageData = pageData;
+    if (!processedPageData && url) {
+        processedPageData = await extractPageData(url);
+    }
+
+    // 🎯 SUPERINTELIGÊNCIA: Análise Emocional Avançada
+    const analiseEmocional = superInteligencia.analisarEmocao(message);
+    
+    // 🎯 CAPTURA DE INTENÇÕES DO CLIENTE
+    const inteligencias = sistemaInteligencias.capturarInteligencias(message);
+    
+    // 🎯 ANÁLISE DE JORNADA
+    const journeyStage = journeyAnalyzer.analyzeJourneyStage(message);
+    
+    // 🎯 SELEÇÃO DE PERSONALIDADE ADAPTATIVA
+    const personalidade = superInteligencia.selecionarPersonalidade(
+        analiseEmocional.emocao, 
+        analiseEmocional.intensidade, 
+        journeyStage
+    );
+
+    // 🎯 ATUALIZAR CONVERSA DO LEAD SE EXISTIR
+    if (leadId) {
+        leadSystem.updateLeadConversation(leadId, message, true);
+        leadSystem.updateLeadJourneyStage(leadId, journeyStage);
+    }
+
+    let finalResponse = "";
+
+    // 🎯 DETECTAR AGENDAMENTO
+    const respostaAgendamento = superInteligencia.detectarAgendamento(message);
+    if (respostaAgendamento) {
+        finalResponse = respostaAgendamento;
+        console.log("📅 Resposta de agendamento gerada");
+    }
+    // 🎯 PROCESSAR CONFIRMAÇÃO DE AGENDAMENTO
+    else if (superInteligencia.processarAgendamento(message)) {
+        finalResponse = superInteligencia.processarAgendamento(message);
+        console.log("✅ Confirmação de agendamento processada");
+    }
+    // 🎯 USAR SISTEMA INTELIGENTE SE INTENÇÕES FORAM DETECTADAS
+    else if (Object.values(inteligencias).some(val => val === true)) {
+        const contatos = processedPageData?.contatos || {};
+        
+        // Gerar resposta base com empatia
+        const respostaEmpatica = superInteligencia.gerarRespostaEmpatica(
+            message, 
+            analiseEmocional, 
+            personalidade, 
+            contatos
+        );
+        
+        // Combinar com resposta contextual
+        const respostaContextual = sistemaInteligencias.gerarRespostaContextual(
+            inteligencias, 
+            contatos, 
+            journeyStage
+        );
+        
+        finalResponse = respostaEmpatica + respostaContextual;
+        console.log(`🎭 Resposta emocional inteligente gerada`);
+    } else {
+        // 🎯 USAR SISTEMA ORIGINAL COM MELHORIAS EMOCIONAIS
+        const respostaIA = await generateAIResponse(message, processedPageData || {}, [], instructions, leadId);
+        
+        // Aplicar melhorias emocionais na resposta
+        if (analiseEmocional.emocao === "negativo" && analiseEmocional.intensidade >= 2) {
+            finalResponse = `🤗 **Entendo que isso é importante para você.** ` + respostaIA;
+        } else if (analiseEmocional.urgencia) {
+            finalResponse = `🚨 **Priorizando sua solicitação!** ` + respostaIA;
+        } else {
+            finalResponse = respostaIA;
+        }
+        
+        console.log(`🤖 Resposta IA com melhorias emocionais`);
+    }
+
+    // 🎯 ATUALIZAR RESPOSTA NO LEAD SE EXISTIR
+    if (leadId) {
+        leadSystem.updateLeadConversation(leadId, finalResponse, false);
+    }
+
+    return res.json({
+        success: true,
+        response: finalResponse,
+        inteligenciasDetectadas: inteligencias,
+        analiseEmocional: analiseEmocional,
+        personalidadeSelecionada: personalidade,
+        journeyStage: journeyStage,
+        bonuses_detected: processedPageData?.bonuses_detected || [],
+        contatos: processedPageData?.contatos || {},
+        metadata: {
+            hasPageData: !!processedPageData,
+            contentLength: processedPageData?.cleanText?.length || 0,
+            method: processedPageData?.method || "none",
+            sistema: "super-inteligencia-v1"
+        }
+    });
+
+} catch (error) {
+    analytics.errors++;
+    logger.error("Super inteligencia endpoint error:", error.message || error);
+    return res.status(500).json({ 
+        success: false, 
+        error: "Erro interno ao gerar resposta inteligente: " + (error.message || "Erro desconhecido"),
+        details: error.message
+    });
+}
+
 });
 
 // ===== ENDPOINT APRIMORADO DE EXTRAÇÃO =====
 app.post("/api/extract-enhanced", async (req, res) => {
-    analytics.extractRequests++;
-    try {
-        const { url } = req.body || {};
-        
-        console.log("📥 [EXTRACAO APRIMORADA] Recebendo requisição para:", url);
-        
-        if (!url) {
-            return res.status(400).json({ 
-                success: false, 
-                error: "URL é obrigatório" 
-            });
-        }
+analytics.extractRequests++;
+try {
+const { url } = req.body || {};
 
-        try { 
-            new URL(url); 
-        } catch (urlErr) { 
-            return res.status(400).json({ 
-                success: false, 
-                error: "URL inválido" 
-            }); 
-        }
-
-        const extractedData = await sistemaExtracao.extrairDadosCompletos(url);
-        
-        if (extractedData.erro) {
-            return res.status(500).json({ 
-                success: false, 
-                error: extractedData.erro 
-            });
-        }
-
-        const validacao = sistemaValidacao.validarDadosCompletos(extractedData);
-        
-        console.log("✅ [EXTRACAO APRIMORADA] Concluída com sucesso");
-        console.log(`🎯 Bônus encontrados: ${validacao.dadosValidados.bonus.length}`);
-        console.log(`📞 Contatos encontrados: ${validacao.dadosValidados.contatos ? Object.keys(validacao.dadosValidados.contatos).length : 0}`);
-        console.log(`📊 Confiança: ${(validacao.pontuacaoConfianca * 100).toFixed(1)}%`);
-        
-        return res.json({ 
-            success: true, 
-            data: validacao.dadosValidados,
-            validacao: {
-                pontuacaoConfianca: validacao.pontuacaoConfianca,
-                problemas: validacao.problemasCriticos,
-                totalBonus: validacao.dadosValidados.bonus.length
-            }
-        });
-
-    } catch (error) {
-        analytics.errors++;
-        console.error("❌ Erro no endpoint /api/extract-enhanced:", error);
-        logger.error("Extract-enhanced endpoint error:", error.message || error);
-        
-        return res.status(500).json({ 
+    console.log("📥 [EXTRACAO APRIMORADA] Recebendo requisição para:", url);
+    
+    if (!url) {
+        return res.status(400).json({ 
             success: false, 
-            error: "Erro interno ao extrair página: " + (error.message || "Erro desconhecido")
+            error: "URL é obrigatório" 
         });
     }
+
+    try { 
+        new URL(url); 
+    } catch (urlErr) { 
+        return res.status(400).json({ 
+            success: false, 
+            error: "URL inválido" 
+        }); 
+    }
+
+    const extractedData = await sistemaExtracao.extrairDadosCompletos(url);
+    
+    if (extractedData.erro) {
+        return res.status(500).json({ 
+            success: false, 
+            error: extractedData.erro 
+        });
+    }
+
+    const validacao = sistemaValidacao.validarDadosCompletos(extractedData);
+    
+    console.log("✅ [EXTRACAO APRIMORADA] Concluída com sucesso");
+    console.log(`🎯 Bônus encontrados: ${validacao.dadosValidados.bonus.length}`);
+    console.log(`📞 Contatos encontrados: ${validacao.dadosValidados.contatos ? Object.keys(validacao.dadosValidados.contatos).length : 0}`);
+    console.log(`📊 Confiança: ${(validacao.pontuacaoConfianca * 100).toFixed(1)}%`);
+    
+    return res.json({ 
+        success: true, 
+        data: validacao.dadosValidados,
+        validacao: {
+            pontuacaoConfianca: validacao.pontuacaoConfianca,
+            problemas: validacao.problemasCriticos,
+            totalBonus: validacao.dadosValidados.bonus.length
+        }
+    });
+
+} catch (error) {
+    analytics.errors++;
+    console.error("❌ Erro no endpoint /api/extract-enhanced:", error);
+    logger.error("Extract-enhanced endpoint error:", error.message || error);
+    
+    return res.status(500).json({ 
+        success: false, 
+        error: "Erro interno ao extrair página: " + (error.message || "Erro desconhecido")
+    });
+}
+
 });
 
 // /api/extract endpoint (ORIGINAL - mantido para compatibilidade)
 app.post("/api/extract", async (req, res) => {
-    analytics.extractRequests++;
-    try {
-        const { url, instructions, robotName } = req.body || {};
-        
-        console.log("📥 Recebendo requisição para extrair:", url);
-        
-        if (!url) {
-            return res.status(400).json({ 
-                success: false, 
-                error: "URL é obrigatório" 
-            });
-        }
+analytics.extractRequests++;
+try {
+const { url, instructions, robotName } = req.body || {};
 
-        try { 
-            new URL(url); 
-        } catch (urlErr) { 
-            return res.status(400).json({ 
-                success: false, 
-                error: "URL inválido" 
-            }); 
-        }
-
-        logger.info(`Starting extraction for URL: ${url}`);
-        
-        const extractedData = await extractPageData(url);
-        
-        if (instructions) extractedData.custom_instructions = instructions;
-        if (robotName) extractedData.robot_name = robotName;
-
-        console.log("✅ Extração concluída com sucesso");
-        
-        return res.json({ 
-            success: true, 
-            data: extractedData 
-        });
-
-    } catch (error) {
-        analytics.errors++;
-        console.error("❌ Erro no endpoint /api/extract:", error);
-        logger.error("Extract endpoint error:", error.message || error);
-        
-        return res.status(500).json({ 
+    console.log("📥 Recebendo requisição para extrair:", url);
+    
+    if (!url) {
+        return res.status(400).json({ 
             success: false, 
-            error: "Erro interno ao extrair página: " + (error.message || "Erro desconhecido"),
-            details: error.message
+            error: "URL é obrigatório" 
         });
     }
+
+    try { 
+        new URL(url); 
+    } catch (urlErr) { 
+        return res.status(400).json({ 
+            success: false, 
+            error: "URL inválido" 
+        }); 
+    }
+
+    logger.info(`Starting extraction for URL: ${url}`);
+    
+    const extractedData = await extractPageData(url);
+    
+    if (instructions) extractedData.custom_instructions = instructions;
+    if (robotName) extractedData.robot_name = robotName;
+
+    console.log("✅ Extração concluída com sucesso");
+    
+    return res.json({ 
+        success: true, 
+        data: extractedData 
+    });
+
+} catch (error) {
+    analytics.errors++;
+    console.error("❌ Erro no endpoint /api/extract:", error);
+    logger.error("Extract endpoint error:", error.message || error);
+    
+    return res.status(500).json({ 
+        success: false, 
+        error: "Erro interno ao extrair página: " + (error.message || "Erro desconhecido"),
+        details: error.message
+    });
+}
+
 });
 
 // ===== FUNÇÃO: Geração Completa do HTML do Chatbot =====
 function generateFullChatbotHTML(pageData = {}, robotName = 'Assistente IA', customInstructions = '') {
-    const escapedPageData = JSON.stringify(pageData || {});
-    const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\\"');
-    const safeInstructions = String(customInstructions || '').replace(/"/g, '\\"');
-    
-    // Gerar botões fixos com contatos
-    const contatos = pageData.contatos || {
-        telefone: [],
-        whatsapp: [], 
-        email: [],
-        site: [pageData.url || ''],
-        endereco: []
-    };
-    
-    const botoesFixos = gerarBotoesFixos(contatos, safeRobotName);
+const escapedPageData = JSON.stringify(pageData || {});
+const safeRobotName = String(robotName || 'Assistente IA').replace(/"/g, '\"');
+const safeInstructions = String(customInstructions || '').replace(/"/g, '\"');
 
-    return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LinkMágico Chatbot - ${safeRobotName}</title>
-<meta name="description" content="Chatbot IA - ${safeRobotName}"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
-.chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative}
-.chat-header h1{font-size:1.5rem;font-weight:600}
-.chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px}
-.chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc}
-.chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
-.chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
-.chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
-.chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px}
-.chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
-.chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
-.send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
-.send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
-.typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px}
-.typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite}
-.typing-dot:nth-child(2){animation-delay:0.2s}
-.typing-dot:nth-child(3){animation-delay:0.4s}
-@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-.lead-form{background:white;padding:25px;margin:20px;border-radius:15px;box-shadow:0 8px 25px rgba(0,0,0,0.1);text-align:center}
-.lead-form h3{color:#1e40af;margin-bottom:10px}
-.lead-form p{color:#64748b;margin-bottom:20px}
-.lead-form input{width:100%;padding:15px;margin-bottom:15px;border:2px solid#e2e8f0;border-radius:10px;font-size:1rem;transition:all 0.3s}
-.lead-form input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.lead-form button{width:100%;background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;border:none;padding:15px;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:600;transition:all 0.3s}
-.lead-form button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(59,130,246,0.3)}
-.contact-buttons{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap}
-.contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:5px}
-.contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)}
-.lm-botoes-fixos a, .lm-botoes-fixos button { font-size: 0.85rem; }
-@media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}.lead-form{margin:10px;padding:20px}.contact-button{min-width:100px;font-size:0.8rem}.lm-botoes-fixos{padding:10px !important}.lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}}
-</style>
-</head>
-<body>
-<div class="chat-container">
-<div class="chat-header">
-<h1>${safeRobotName}</h1>
-<div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div>
-</div>
+// Gerar botões fixos com contatos
+const contatos = pageData.contatos || {
+    telefone: [],
+    whatsapp: [], 
+    email: [],
+    site: [pageData.url || ''],
+    endereco: []
+};
 
+const botoesFixos = gerarBotoesFixos(contatos, safeRobotName);
+
+return `<!doctype html>
+
+<html lang="pt-BR"> <head> <meta charset="utf-8"/> <meta name="viewport" content="width=device-width,initial-scale=1"/> <title>LinkMágico Chatbot - ${safeRobotName}</title> <meta name="description" content="Chatbot IA - ${safeRobotName}"/> <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"> <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"> <style> *{margin:0;padding:0;box-sizing:border-box} body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px} .chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden} .chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative} .chat-header h1{font-size:1.5rem;font-weight:600} .chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px} .chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc} .chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4} .chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px} .chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px} .chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px} .chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s} .chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)} .send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s} .send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)} .send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none} .typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px} .typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite} .typing-dot:nth-child(2){animation-delay:0.2s} .typing-dot:nth-child(3){animation-delay:0.4s} @keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}} .lead-form{background:white;padding:25px;margin:20px;border-radius:15px;box-shadow:0 8px 25px rgba(0,0,0,0.1);text-align:center} .lead-form h3{color:#1e40af;margin-bottom:10px} .lead-form p{color:#64748b;margin-bottom:20px} .lead-form input{width:100%;padding:15px;margin-bottom:15px;border:2px solid#e2e8f0;border-radius:10px;font-size:1rem;transition:all 0.3s} .lead-form input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)} .lead-form button{width:100%;background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;border:none;padding:15px;border-radius:10px;cursor:pointer;font-size:1.1rem;font-weight:600;transition:all 0.3s} .lead-form button:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(59,130,246,0.3)} .contact-buttons{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap} .contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.9rem;display:flex;align-items:center;justify-content:center;gap:5px} .contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)} .lm-botoes-fixos a, .lm-botoes-fixos button { font-size: 0.85rem; } @media (max-width:768px){.chat-container{height:100vh;border-radius:0}.chat-message{max-width:85%}.lead-form{margin:10px;padding:20px}.contact-button{min-width:100px;font-size:0.8rem}.lm-botoes-fixos{padding:10px !important}.lm-botoes-fixos a, .lm-botoes-fixos button{padding:10px 15px !important;font-size:0.8rem !important}} </style> </head> <body> <div class="chat-container"> <div class="chat-header"> <h1>${safeRobotName}</h1> <div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div> </div>
 ${botoesFixos}
 
-<div class="lead-form" id="leadForm">
-<h3>🎯 Vamos começar!</h3>
-<p>Deixe seus dados para uma experiência personalizada</p>
-<input type="text" id="leadName" placeholder="Seu nome completo">
-<input type="email" id="leadEmail" placeholder="Seu melhor email" required>
-<input type="tel" id="leadPhone" placeholder="Seu WhatsApp (opcional)">
-<button id="startChat"><i class="fas fa-comments" style="margin-right:8px"></i> Iniciar Conversa</button>
-</div>
-
-<div class="chat-messages" id="chatMessages" style="display:none">
-<div class="chat-message bot">Olá! Sou ${safeRobotName}, estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div>
-</div>
-
-<div class="chat-input-container" id="chatInputContainer" style="display:none">
-<input type="text" class="chat-input" id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off">
-<button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button>
-</div>
-
-<div class="typing-indicator" id="typingIndicator">
-<span>Digitando</span>
-<div class="typing-dot"></div>
-<div class="typing-dot"></div>
-<div class="typing-dot"></div>
-</div>
-</div>
-
-<script>
-const pageData = ${escapedPageData};
-const robotName = "${safeRobotName}";
-const customInstructions = "${safeInstructions}";
-
-const chatMessages = document.getElementById('chatMessages');
-const messageInput = document.getElementById('messageInput');
-const sendButton = document.getElementById('sendButton');
-const typingIndicator = document.getElementById('typingIndicator');
-const leadForm = document.getElementById('leadForm');
-const chatInputContainer = document.getElementById('chatInputContainer');
-const startChatBtn = document.getElementById('startChat');
-
-let leadId = null;
-let agendamentoAtivo = false;
-
-// Função para iniciar agendamento
-function iniciarAgendamento() {
-    const mensagem = "Gostaria de agendar uma reunião";
-    messageInput.value = mensagem;
-    sendMessage();
-}
-
-// Capturar lead
-startChatBtn.addEventListener('click', async function() {
-    const name = document.getElementById('leadName').value.trim();
-    const email = document.getElementById('leadEmail').value.trim();
-    const phone = document.getElementById('leadPhone').value.trim();
-
-    if (!email) {
-        alert('Por favor, informe seu email');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/capture-lead', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                nome: name || 'Não informado',
-                email: email,
-                telefone: phone || 'Não informado',
-                url_origem: window.location.href,
-                robotName: robotName
-            })
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-            leadId = data.lead.id;
-            leadForm.style.display = 'none';
-            chatMessages.style.display = 'flex';
-            chatInputContainer.style.display = 'flex';
-            
-            addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false);
-            messageInput.focus();
-        }
-    } catch (error) {
-        console.error('Erro ao capturar lead:', error);
-        alert('Erro ao processar. Tente novamente.');
-    }
-});
-
-function addMessage(text, isUser = false) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = \`chat-message \${isUser ? 'user' : 'bot'}\`;
-    messageDiv.textContent = text;
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-async function sendMessage() {
-    const message = messageInput.value.trim();
-    if (!message) return;
-
-    addMessage(message, true);
-    messageInput.value = '';
-    sendButton.disabled = true;
-    typingIndicator.style.display = 'flex';
-
-    try {
-        const response = await fetch('/api/process-chat-inteligente', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: message,
-                pageData: pageData,
-                robotName: robotName,
-                instructions: customInstructions,
-                conversationId: 'chatbot_' + Date.now(),
-                leadId: leadId
-            })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            addMessage(data.response, false);
-        } else {
-            addMessage('Desculpe, ocorreu um erro. Tente novamente.', false);
-        }
-    } catch (error) {
-        addMessage('Erro de conexão. Verifique sua internet.', false);
-    } finally {
-        typingIndicator.style.display = 'none';
-        sendButton.disabled = false;
-        messageInput.focus();
-    }
-}
-
-sendButton.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-});
-
-// Auto-focus no primeiro campo do formulário
-document.getElementById('leadName').focus();
-</script>
-</body>
-</html>`;
-}
-
+<div class="lead-form" id="leadForm"> <h3>🎯 Vamos começar!</h3> <p>Deixe seus dados para uma experiência personalizada</p> <input type="text" id="leadName" placeholder="Seu nome completo"> <input type="email" id="leadEmail" placeholder="Seu melhor email" required> <input type="tel" id="leadPhone" placeholder="Seu WhatsApp (opcional)"> <button id="startChat"><i class="fas fa-comments" style="margin-right:8px"></i> Iniciar Conversa</button> </div><div class="chat-messages" id="chatMessages" style="display:none"> <div class="chat-message bot">Olá! Sou ${safeRobotName}, estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div> </div><div class="chat-input-container" id="chatInputContainer" style="display:none"> <input type="text" class="chat-input" id="messageInput" placeholder="Digite sua mensagem..." autocomplete="off"> <button class="send-button" id="sendButton"><i class="fas fa-paper-plane"></i></button> </div><div class="typing-indicator" id="typingIndicator"> <span>Digitando</span> <div class="typing-dot"></div> <div class="typing-dot"></div> <div class="typing-dot"></div> </div> </div><script> const pageData = ${escapedPageData}; const robotName = "${safeRobotName}"; const customInstructions = "${safeInstructions}"; const chatMessages = document.getElementById('chatMessages'); const messageInput = document.getElementById('messageInput'); const sendButton = document.getElementById('sendButton'); const typingIndicator = document.getElementById('typingIndicator'); const leadForm = document.getElementById('leadForm'); const chatInputContainer = document.getElementById('chatInputContainer'); const startChatBtn = document.getElementById('startChat'); let leadId = null; let agendamentoAtivo = false; // Função para iniciar agendamento function iniciarAgendamento() { const mensagem = "Gostaria de agendar uma reunião"; messageInput.value = mensagem; sendMessage(); } // Capturar lead startChatBtn.addEventListener('click', async function() { const name = document.getElementById('leadName').value.trim(); const email = document.getElementById('leadEmail').value.trim(); const phone = document.getElementById('leadPhone').value.trim(); if (!email) { alert('Por favor, informe seu email'); return; } try { const response = await fetch('/api/capture-lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name || 'Não informado', email: email, telefone: phone || 'Não informado', url_origem: window.location.href, robotName: robotName }) }); const data = await response.json(); if (data.success) { leadId = data.lead.id; leadForm.style.display = 'none'; chatMessages.style.display = 'flex'; chatInputContainer.style.display = 'flex'; addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false); messageInput.focus(); } } catch (error) { console.error('Erro ao capturar lead:', error); alert('Erro ao processar. Tente novamente.'); } }); function addMessage(text, isUser = false) { const messageDiv = document.createElement('div'); messageDiv.className = \`chat-message \${isUser ? 'user' : 'bot'}\`; messageDiv.textContent = text; chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight; } async function sendMessage() { const message = messageInput.value.trim(); if (!message) return; addMessage(message, true); messageInput.value = ''; sendButton.disabled = true; typingIndicator.style.display = 'flex'; try { const response = await fetch('/api/process-chat-inteligente', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: message, pageData: pageData, robotName: robotName, instructions: customInstructions, conversationId: 'chatbot_' + Date.now(), leadId: leadId }) }); const data = await response.json(); if (data.success) { addMessage(data.response, false); } else { addMessage('Desculpe, ocorreu um erro. Tente novamente.', false); } } catch (error) { addMessage('Erro de conexão. Verifique sua internet.', false); } finally { typingIndicator.style.display = 'none'; sendButton.disabled = false; messageInput.focus(); } } sendButton.addEventListener('click', sendMessage); messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); }); // Auto-focus no primeiro campo do formulário document.getElementById('leadName').focus(); </script></body> </html>`; }
 // Widget JS atualizado
 app.get("/public/widget.js", (req, res) => {
-    res.set("Content-Type", "application/javascript");
-    res.send(`// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n    'use strict';\n    if (window.LinkMagicoWidget) return;\n    \n    var LinkMagicoWidget = {\n        config: {\n            position: 'bottom-right',\n            primaryColor: '#3b82f6',\n            robotName: 'Assistente IA',\n            salesUrl: '',\n            instructions: '',\n            apiBase: window.location.origin,\n            captureLeads: true\n        },\n        \n        getApiKeyFromQuery: function(name) {\n            const urlParams = new URLSearchParams(window.location.search);\n            return urlParams.get(name);\n        },\n\n        getStoredApiKey: function() {\n            return localStorage.getItem("lm_api_key");\n        },\n\n        storeApiKey: function(apiKey) {\n            localStorage.setItem("lm_api_key", apiKey);\n        },\n\n        init: function(userConfig) {\n            this.config = Object.assign(this.config, userConfig || {});\n            if (document.readyState === 'loading') {\n                document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n            } else {\n                this.createWidget();\n            }\n        },\n        \n        createWidget: function() {\n            var container = document.createElement('div');\n            container.id = 'linkmagico-widget';\n            container.innerHTML = this.getHTML();\n            this.addStyles();\n            document.body.appendChild(container);\n            this.bindEvents();\n            \n            this.leadId = this.getStoredLeadId();\n        },\n        \n        getHTML: function() {\n            return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n                   '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n                   '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n                   '<div class="lm-messages" id="lm-messages">' +\n                   '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n                   '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n                   '<div class="lm-form-title">Antes de começarmos...</div>' +\n                   '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n                   '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n                   '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n                   '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n                   '</div>' +\n                   '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n        },\n        \n        addStyles: function() {\n            if (document.getElementById('lm-styles')) return;\n            var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n                     '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n                     '.lm-button:hover{transform:scale(1.1)}' +\n                     '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n                     '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n                     '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n                     '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n                     '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n                     '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n                     '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n                     '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n                     '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n                     '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n                     '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n                     '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n                     '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n                     '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n                     '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n            var styleSheet = document.createElement('style');\n            styleSheet.id = 'lm-styles';\n            styleSheet.type = 'text/css';\n            styleSheet.innerText = css;\n            document.head.appendChild(styleSheet);\n        },\n        \n        bindEvents: function() {\n            var button = document.getElementById('lm-button');\n            var chat = document.getElementById('lm-chat');\n            var close = document.getElementById('lm-close');\n            var send = document.getElementById('lm-send');\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var leadForm = document.getElementById('lm-lead-form');\n            var leadSubmit = document.getElementById('lm-lead-submit');\n\n            button.addEventListener('click', function() {\n                chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n                if (this.config.captureLeads && !this.leadId) {\n                    leadForm.style.display = 'block';\n                    input.style.display = 'none';\n                    send.style.display = 'none';\n                }\n            }.bind(this));\n\n            close.addEventListener('click', function() {\n                chat.style.display = 'none';\n            });\n\n            leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n            send.addEventListener('click', this.sendMessage.bind(this));\n            input.addEventListener('keypress', function(e) {\n                if (e.key === 'Enter') {\n                    this.sendMessage();\n                }\n            }.bind(this));\n        },\n\n        captureLead: async function() {\n            var name = document.getElementById('lm-lead-name').value.trim();\n            var email = document.getElementById('lm-lead-email').value.trim();\n            var phone = document.getElementById('lm-lead-phone').value.trim();\n\n            if (!email) {\n                alert('Por favor, informe seu email');\n                return;\n            }\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json',\n                        'X-API-Key': this.config.apiKey\n                    },\n                    body: JSON.stringify({\n                        nome: name || 'Não informado',\n                        email: email,\n                        telefone: phone || 'Não informado',\n                        url_origem: window.location.href,\n                        robotName: this.config.robotName\n                    })\n                });\n\n                const data = await response.json();\n\n                if (data.success) {\n                    this.leadId = data.lead.id;\n                    this.storeLeadId(this.leadId);\n                    \n                    document.getElementById('lm-lead-form').style.display = 'none';\n                    document.getElementById('lm-input').style.display = 'block';\n                    document.getElementById('lm-send').style.display = 'block';\n                    \n                    var welcomeMsg = document.createElement('div');\n                    welcomeMsg.className = 'lm-msg lm-bot';\n                    welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n                    document.getElementById('lm-messages').appendChild(welcomeMsg);\n                }\n            } catch (error) {\n                console.error('Erro ao capturar lead:', error);\n                alert('Erro ao processar. Tente novamente.');\n            }\n        },\n\n        getStoredLeadId: function() {\n            return localStorage.getItem('lm_lead_id');\n        },\n\n        storeLeadId: function(leadId) {\n            localStorage.setItem('lm_lead_id', leadId);\n        },\n\n        sendMessage: async function() {\n            var input = document.getElementById('lm-input');\n            var messages = document.getElementById('lm-messages');\n            var message = input.value.trim();\n            if (!message) return;\n\n            var userMsg = document.createElement('div');\n            userMsg.className = 'lm-msg lm-user';\n            userMsg.textContent = message;\n            messages.appendChild(userMsg);\n            input.value = '';\n            messages.scrollTop = messages.scrollHeight;\n\n            try {\n                const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n                    method: 'POST',\n                    headers: {\n                        'Content-Type': 'application/json',\n                        'X-API-Key': this.config.apiKey\n                    },\n                    body: JSON.stringify({\n                        message: message,\n                        url: this.config.salesUrl,\n                        instructions: this.config.instructions,\n                        robotName: this.config.robotName,\n                        conversationId: this.config.conversationId,\n                        leadId: this.leadId\n                    })\n                });\n                const data = await response.json();\n\n                var botMsg = document.createElement('div');\n                botMsg.className = 'lm-msg lm-bot';\n                botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n                messages.appendChild(botMsg);\n                messages.scrollTop = messages.scrollHeight;\n\n            } catch (error) {\n                console.error('Widget chat error:', error);\n                var errorMsg = document.createElement('div');\n                errorMsg.className = 'lm-msg lm-bot';\n                errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n                messages.appendChild(errorMsg);\n                messages.scrollTop = messages.scrollHeight;\n            }\n        }\n    };\n\n    window.LinkMagicoWidget = LinkMagicoWidget;\n    if (window.LinkMagicoWidgetConfig) {\n        window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n    }\n})();\n`);
+res.set("Content-Type", "application/javascript");
+res.send(// LinkMágico Widget v7.0 - Com Captura de Leads\n(function() {\n 'use strict';\n if (window.LinkMagicoWidget) return;\n \n var LinkMagicoWidget = {\n config: {\n position: 'bottom-right',\n primaryColor: '#3b82f6',\n robotName: 'Assistente IA',\n salesUrl: '',\n instructions: '',\n apiBase: window.location.origin,\n captureLeads: true\n },\n \n getApiKeyFromQuery: function(name) {\n const urlParams = new URLSearchParams(window.location.search);\n return urlParams.get(name);\n },\n\n getStoredApiKey: function() {\n return localStorage.getItem("lm_api_key");\n },\n\n storeApiKey: function(apiKey) {\n localStorage.setItem("lm_api_key", apiKey);\n },\n\n init: function(userConfig) {\n this.config = Object.assign(this.config, userConfig || {});\n if (document.readyState === 'loading') {\n document.addEventListener('DOMContentLoaded', this.createWidget.bind(this));\n } else {\n this.createWidget();\n }\n },\n \n createWidget: function() {\n var container = document.createElement('div');\n container.id = 'linkmagico-widget';\n container.innerHTML = this.getHTML();\n this.addStyles();\n document.body.appendChild(container);\n this.bindEvents();\n \n this.leadId = this.getStoredLeadId();\n },\n \n getHTML: function() {\n return '<div class="lm-button" id="lm-button"><i class="fas fa-comments"></i></div>' +\n '<div class="lm-chat" id="lm-chat" style="display:none;">' +\n '<div class="lm-header"><span>' + this.config.robotName + '</span><button id="lm-close">×</button></div>' +\n '<div class="lm-messages" id="lm-messages">' +\n '<div class="lm-msg lm-bot">Olá! Sou ' + this.config.robotName + ', estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?</div></div>' +\n '<div class="lm-lead-form" id="lm-lead-form" style="display:none;">' +\n '<div class="lm-form-title">Antes de começarmos...</div>' +\n '<input type="text" id="lm-lead-name" placeholder="Seu nome" class="lm-form-input">' +\n '<input type="email" id="lm-lead-email" placeholder="Seu melhor email" class="lm-form-input" required>' +\n '<input type="tel" id="lm-lead-phone" placeholder="Seu WhatsApp" class="lm-form-input">' +\n '<button id="lm-lead-submit" class="lm-form-submit">Começar Conversa</button>' +\n '</div>' +\n '<div class="lm-input"><input id="lm-input" placeholder="Digite..."><button id="lm-send">➤</button></div></div>';\n },\n \n addStyles: function() {\n if (document.getElementById('lm-styles')) return;\n var css = '#linkmagico-widget{position:fixed;right:20px;bottom:20px;z-index:999999;font-family:sans-serif}' +\n '.lm-button{width:60px;height:60px;background:' + this.config.primaryColor + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:1.8em;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.2);transition:all 0.3s ease}' +\n '.lm-button:hover{transform:scale(1.1)}' +\n '.lm-chat{position:fixed;right:20px;bottom:90px;width:350px;height:500px;background:white;border-radius:10px;box-shadow:0 8px 16px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden}' +\n '.lm-header{background:' + this.config.primaryColor + ';color:white;padding:10px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}' +\n '.lm-header button{background:none;border:none;color:white;font-size:1.2em;cursor:pointer}' +\n '.lm-messages{flex:1;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}' +\n '.lm-msg{padding:8px 12px;border-radius:15px;max-width:80%}' +\n '.lm-bot{background:#e0e0e0;align-self:flex-start}' +\n '.lm-user{background:' + this.config.primaryColor + ';color:white;align-self:flex-end}' +\n '.lm-input{display:flex;padding:10px;border-top:1px solid #eee}' +\n '.lm-input input{flex:1;border:1px solid #ddd;border-radius:20px;padding:8px 12px;outline:none}' +\n '.lm-input button{background:' + this.config.primaryColor + ';border:none;color:white;border-radius:50%;width:35px;height:35px;margin-left:10px;cursor:pointer}' +\n '.lm-lead-form{padding:15px;border-bottom:1px solid #eee}' +\n '.lm-form-title{font-weight:bold;margin-bottom:10px;color:#333}' +\n '.lm-form-input{width:100%;padding:8px;margin-bottom:8px;border:1px solid #ddd;border-radius:5px;font-size:0.9em}' +\n '.lm-form-submit{width:100%;background:' + this.config.primaryColor + ';color:white;border:none;padding:10px;border-radius:5px;cursor:pointer}' +\n '@media (max-width: 480px){.lm-chat{width:90%;height:80%;right:5%;bottom:5%}}';\n var styleSheet = document.createElement('style');\n styleSheet.id = 'lm-styles';\n styleSheet.type = 'text/css';\n styleSheet.innerText = css;\n document.head.appendChild(styleSheet);\n },\n \n bindEvents: function() {\n var button = document.getElementById('lm-button');\n var chat = document.getElementById('lm-chat');\n var close = document.getElementById('lm-close');\n var send = document.getElementById('lm-send');\n var input = document.getElementById('lm-input');\n var messages = document.getElementById('lm-messages');\n var leadForm = document.getElementById('lm-lead-form');\n var leadSubmit = document.getElementById('lm-lead-submit');\n\n button.addEventListener('click', function() {\n chat.style.display = chat.style.display === 'none' ? 'flex' : 'none';\n if (this.config.captureLeads && !this.leadId) {\n leadForm.style.display = 'block';\n input.style.display = 'none';\n send.style.display = 'none';\n }\n }.bind(this));\n\n close.addEventListener('click', function() {\n chat.style.display = 'none';\n });\n\n leadSubmit.addEventListener('click', this.captureLead.bind(this));\n\n send.addEventListener('click', this.sendMessage.bind(this));\n input.addEventListener('keypress', function(e) {\n if (e.key === 'Enter') {\n this.sendMessage();\n }\n }.bind(this));\n },\n\n captureLead: async function() {\n var name = document.getElementById('lm-lead-name').value.trim();\n var email = document.getElementById('lm-lead-email').value.trim();\n var phone = document.getElementById('lm-lead-phone').value.trim();\n\n if (!email) {\n alert('Por favor, informe seu email');\n return;\n }\n\n try {\n const response = await fetch(this.config.apiBase + '/api/capture-lead', {\n method: 'POST',\n headers: {\n 'Content-Type': 'application/json',\n 'X-API-Key': this.config.apiKey\n },\n body: JSON.stringify({\n nome: name || 'Não informado',\n email: email,\n telefone: phone || 'Não informado',\n url_origem: window.location.href,\n robotName: this.config.robotName\n })\n });\n\n const data = await response.json();\n\n if (data.success) {\n this.leadId = data.lead.id;\n this.storeLeadId(this.leadId);\n \n document.getElementById('lm-lead-form').style.display = 'none';\n document.getElementById('lm-input').style.display = 'block';\n document.getElementById('lm-send').style.display = 'block';\n \n var welcomeMsg = document.createElement('div');\n welcomeMsg.className = 'lm-msg lm-bot';\n welcomeMsg.textContent = 'Obrigado, ' + (name || 'amigo') + '! Como posso ajudar você hoje?';\n document.getElementById('lm-messages').appendChild(welcomeMsg);\n }\n } catch (error) {\n console.error('Erro ao capturar lead:', error);\n alert('Erro ao processar. Tente novamente.');\n }\n },\n\n getStoredLeadId: function() {\n return localStorage.getItem('lm_lead_id');\n },\n\n storeLeadId: function(leadId) {\n localStorage.setItem('lm_lead_id', leadId);\n },\n\n sendMessage: async function() {\n var input = document.getElementById('lm-input');\n var messages = document.getElementById('lm-messages');\n var message = input.value.trim();\n if (!message) return;\n\n var userMsg = document.createElement('div');\n userMsg.className = 'lm-msg lm-user';\n userMsg.textContent = message;\n messages.appendChild(userMsg);\n input.value = '';\n messages.scrollTop = messages.scrollHeight;\n\n try {\n const response = await fetch(this.config.apiBase + '/api/chat-universal', {\n method: 'POST',\n headers: {\n 'Content-Type': 'application/json',\n 'X-API-Key': this.config.apiKey\n },\n body: JSON.stringify({\n message: message,\n url: this.config.salesUrl,\n instructions: this.config.instructions,\n robotName: this.config.robotName,\n conversationId: this.config.conversationId,\n leadId: this.leadId\n })\n });\n const data = await response.json();\n\n var botMsg = document.createElement('div');\n botMsg.className = 'lm-msg lm-bot';\n botMsg.textContent = data.response || 'Desculpe, ocorreu um erro.';\n messages.appendChild(botMsg);\n messages.scrollTop = messages.scrollHeight;\n\n } catch (error) {\n console.error('Widget chat error:', error);\n var errorMsg = document.createElement('div');\n errorMsg.className = 'lm-msg lm-bot';\n errorMsg.textContent = 'Erro de conexão. Tente novamente.';\n messages.appendChild(errorMsg);\n messages.scrollTop = messages.scrollHeight;\n }\n }\n };\n\n window.LinkMagicoWidget = LinkMagicoWidget;\n if (window.LinkMagicoWidgetConfig) {\n window.LinkMagicoWidget.init(window.LinkMagicoWidgetConfig);\n }\n})();\n);
 });
 
 function generateChatbotHTML({ robotName, url, instructions }) {
-    const escapedRobotName = String(robotName).replace(/"/g, "&quot;");
-    const escapedUrl = String(url).replace(/"/g, "&quot;");
-    const escapedInstructions = String(instructions).replace(/"/g, "&quot;");
+const escapedRobotName = String(robotName).replace(/"/g, """);
+const escapedUrl = String(url).replace(/"/g, """);
+const escapedInstructions = String(instructions).replace(/"/g, """);
 
-    return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LinkMágico Chatbot - ${escapedRobotName}</title>
-<meta name="description" content="Chatbot IA - ${escapedRobotName}"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
-.chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative}
-.chat-header h1{font-size:1.5rem;font-weight:600}
-.chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px}
-.chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc}
-.chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4}
-.chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px}
-.chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px}
-.chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px}
-.chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s}
-.chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
-.send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)}
-.send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
-.typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px}
-.typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite}
-.typing-dot:nth-child(2){animation-delay:0.2s}
-.typing-dot:nth-child(3){animation-delay:0.4s}
-@keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-10px)}}
-.status-online{position:absolute;top:15px;right:15px;background:rgba(16,185,129,0.2);color:#10b981;padding:5px 10px;border-radius:15px;font-size:0.75rem;font-weight:600}
-.lead-form{background:white;padding:20px;border-radius:10px;margin:20px;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
-.lead-form h3{margin-bottom:15px;color:#1e40af}
-.lead-form input{width:100%;padding:12px;margin-bottom:10px;border:1px solid#e2e8f0;border-radius:8px;font-size:0.95rem}
-.lead-form button{width:100%;background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;font-weight:600}
-.contact-buttons{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap}
-.contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.85rem}
-.contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)}
-.contact-button i{margin-right:5px}
-</style>
-</head>
-<body>
-<div class="chat-container">
-<div class="chat-header">
-<h1>${escapedRobotName}</h1>
-<div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div>
-<div class="status-online">Online</div>
-</div>
+return `<!doctype html>
 
-<div class="lead-form" id="leadForm">
-<h3>🎯 Vamos começar!</h3>
-<p style="margin-bottom:15px;color:#64748b">Deixe seus dados para uma experiência personalizada</p>
-<input type="text" id="leadName" placeholder="Seu nome completo">
-<input type="email" id="leadEmail" placeholder="Seu melhor email" required>
-<input type="tel" id="leadPhone" placeholder="Seu WhatsApp (opcional)">
-<button id="startChat">Iniciar Conversa →</button>
-</div>
-
-<div class="chat-messages" id="chatMessages" style="display:none">
-<div class="chat-message bot">
-Olá! Sou ${escapedRobotName}, estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje?
-</div>
-</div>
-
-<div class="typing-indicator" id="typingIndicator">
-<span class="typing-dot"></span>
-<span class="typing-dot"></span>
-<span class="typing-dot"></span>
-<span>Digitando...</span>
-</div>
-
-<div class="chat-input-container" id="chatInputContainer" style="display:none">
-<input type="text" class="chat-input" id="chatInput" placeholder="Digite sua pergunta..." maxlength="500">
-<button class="send-button" id="sendButton">
-<i class="fas fa-paper-plane"></i>
-</button>
-</div>
-</div>
-
-<script>
-const chatMessages = document.getElementById('chatMessages');
-const chatInput = document.getElementById('chatInput');
-const sendButton = document.getElementById('sendButton');
-const typingIndicator = document.getElementById('typingIndicator');
-const leadForm = document.getElementById('leadForm');
-const chatInputContainer = document.getElementById('chatInputContainer');
-const startChatBtn = document.getElementById('startChat');
-
-const config = {
-    robotName: "${escapedRobotName}",
-    url: "${escapedUrl}",
-    instructions: "${escapedInstructions}",
-    conversationId: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
-};
-
-let isTyping = false;
-let leadId = null;
-
-// Capturar lead
-startChatBtn.addEventListener('click', async function() {
-    const name = document.getElementById('leadName').value.trim();
-    const email = document.getElementById('leadEmail').value.trim();
-    const phone = document.getElementById('leadPhone').value.trim();
-
-    if (!email) {
-        alert('Por favor, informe seu email');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/capture-lead', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                nome: name || 'Não informado',
-                email: email,
-                telefone: phone || 'Não informado',
-                url_origem: window.location.href,
-                robotName: config.robotName
-            })
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-            leadId = data.lead.id;
-            leadForm.style.display = 'none';
-            chatMessages.style.display = 'flex';
-            chatInputContainer.style.display = 'flex';
-            
-            addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false);
-        }
-    } catch (error) {
-        console.error('Erro ao capturar lead:', error);
-        alert('Erro ao processar. Tente novamente.');
-    }
-});
-
-function addMessage(content, isUser = false) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'chat-message ' + (isUser ? 'user' : 'bot');
-    messageDiv.textContent = content;
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function showTyping() {
-    isTyping = true;
-    typingIndicator.style.display = 'flex';
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function hideTyping() {
-    isTyping = false;
-    typingIndicator.style.display = 'none';
-}
-
-async function sendMessage() {
-    const message = chatInput.value.trim();
-    if (!message || isTyping) return;
-
-    addMessage(message, true);
-    chatInput.value = '';
-    sendButton.disabled = true;
-    showTyping();
-
-    try {
-        const response = await fetch('/api/chat-universal', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: message,
-                url: config.url,
-                instructions: config.instructions,
-                robotName: config.robotName,
-                conversationId: config.conversationId,
-                leadId: leadId
-            })
-        });
-
-        const data = await response.json();
-        
-        hideTyping();
-        
-        if (data.success) {
-            addMessage(data.response);
-        } else {
-            addMessage('Desculpe, ocorreu um erro. Tente novamente em alguns minutos.');
-        }
-    } catch (error) {
-        hideTyping();
-        addMessage('Erro de conexão. Verifique sua internet e tente novamente.');
-    } finally {
-        sendButton.disabled = false;
-        chatInput.focus();
-    }
-}
-
-sendButton.addEventListener('click', sendMessage);
-chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-    }
-});
-
-// Auto-focus no primeiro campo do formulário
-document.getElementById('leadName').focus();
-</script>
-</body>
-</html>`;
-}
-
+<html lang="pt-BR"> <head> <meta charset="utf-8"/> <meta name="viewport" content="width=device-width,initial-scale=1"/> <title>LinkMágico Chatbot - ${escapedRobotName}</title> <meta name="description" content="Chatbot IA - ${escapedRobotName}"/> <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"> <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"> <style> *{margin:0;padding:0;box-sizing:border-box} body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px} .chat-container{width:100%;max-width:800px;height:90vh;background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden} .chat-header{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;padding:20px;text-align:center;position:relative} .chat-header h1{font-size:1.5rem;font-weight:600} .chat-header .subtitle{font-size:0.9rem;opacity:0.9;margin-top:5px} .chat-messages{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:15px;background:#f8fafc} .chat-message{max-width:70%;padding:15px;border-radius:15px;font-size:0.95rem;line-height:1.4} .chat-message.user{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;align-self:flex-end;border-bottom-right-radius:5px} .chat-message.bot{background:#f1f5f9;color:#334155;align-self:flex-start;border-bottom-left-radius:5px} .chat-input-container{padding:20px;background:white;border-top:1px solid#e2e8f0;display:flex;gap:10px} .chat-input{flex:1;border:1px solid#e2e8f0;border-radius:25px;padding:12px 20px;font-size:0.95rem;outline:none;transition:all 0.3s} .chat-input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)} .send-button{background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);border:none;border-radius:50%;width:50px;height:50px;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s} .send-button:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(59,130,246,0.4)} .send-button:disabled{opacity:0.6;cursor:not-allowed;transform:none} .typing-indicator{display:none;align-items:center;gap:5px;color:#64748b;font-size:0.9rem;margin-top:10px} .typing-dot{width:8px;height:8px;background:#64748b;border-radius:50%;animation:typing 1.4s infinite} .typing-dot:nth-child(2){animation-delay:0.2s} .typing-dot:nth-child(3){animation-delay:0.4s} @keyframes typing{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-10px)}} .status-online{position:absolute;top:15px;right:15px;background:rgba(16,185,129,0.2);color:#10b981;padding:5px 10px;border-radius:15px;font-size:0.75rem;font-weight:600} .lead-form{background:white;padding:20px;border-radius:10px;margin:20px;box-shadow:0 4px 12px rgba(0,0,0,0.1)} .lead-form h3{margin-bottom:15px;color:#1e40af} .lead-form input{width:100%;padding:12px;margin-bottom:10px;border:1px solid#e2e8f0;border-radius:8px;font-size:0.95rem} .lead-form button{width:100%;background:linear-gradient(135deg,#3b82f6 0%,#1e40af 100%);color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;font-weight:600} .contact-buttons{display:flex;gap:10px;margin-top:15px;flex-wrap:wrap} .contact-button{flex:1;min-width:120px;background:#f1f5f9;border:1px solid#e2e8f0;border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all 0.3s;text-decoration:none;color:#334155;font-size:0.85rem} .contact-button:hover{background:#3b82f6;color:white;transform:translateY(-2px)} .contact-button i{margin-right:5px} </style> </head> <body> <div class="chat-container"> <div class="chat-header"> <h1>${escapedRobotName}</h1> <div class="subtitle">Estou aqui para tirar todas as suas dúvidas</div> <div class="status-online">Online</div> </div><div class="lead-form" id="leadForm"> <h3>🎯 Vamos começar!</h3> <p style="margin-bottom:15px;color:#64748b">Deixe seus dados para uma experiência personalizada</p> <input type="text" id="leadName" placeholder="Seu nome completo"> <input type="email" id="leadEmail" placeholder="Seu melhor email" required> <input type="tel" id="leadPhone" placeholder="Seu WhatsApp (opcional)"> <button id="startChat">Iniciar Conversa →</button> </div><div class="chat-messages" id="chatMessages" style="display:none"> <div class="chat-message bot"> Olá! Sou ${escapedRobotName}, estou aqui para tirar todas as suas dúvidas. Como posso ajudar você hoje? </div> </div><div class="typing-indicator" id="typingIndicator"> <span class="typing-dot"></span> <span class="typing-dot"></span> <span class="typing-dot"></span> <span>Digitando...</span> </div><div class="chat-input-container" id="chatInputContainer" style="display:none"> <input type="text" class="chat-input" id="chatInput" placeholder="Digite sua pergunta..." maxlength="500"> <button class="send-button" id="sendButton"> <i class="fas fa-paper-plane"></i> </button> </div> </div><script> const chatMessages = document.getElementById('chatMessages'); const chatInput = document.getElementById('chatInput'); const sendButton = document.getElementById('sendButton'); const typingIndicator = document.getElementById('typingIndicator'); const leadForm = document.getElementById('leadForm'); const chatInputContainer = document.getElementById('chatInputContainer'); const startChatBtn = document.getElementById('startChat'); const config = { robotName: "${escapedRobotName}", url: "${escapedUrl}", instructions: "${escapedInstructions}", conversationId: 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9) }; let isTyping = false; let leadId = null; // Capturar lead startChatBtn.addEventListener('click', async function() { const name = document.getElementById('leadName').value.trim(); const email = document.getElementById('leadEmail').value.trim(); const phone = document.getElementById('leadPhone').value.trim(); if (!email) { alert('Por favor, informe seu email'); return; } try { const response = await fetch('/api/capture-lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: name || 'Não informado', email: email, telefone: phone || 'Não informado', url_origem: window.location.href, robotName: config.robotName }) }); const data = await response.json(); if (data.success) { leadId = data.lead.id; leadForm.style.display = 'none'; chatMessages.style.display = 'flex'; chatInputContainer.style.display = 'flex'; addMessage(\`Olá \${name || 'amigo'}! É um prazer ter você aqui. Como posso ajudar você hoje?\`, false); } } catch (error) { console.error('Erro ao capturar lead:', error); alert('Erro ao processar. Tente novamente.'); } }); function addMessage(content, isUser = false) { const messageDiv = document.createElement('div'); messageDiv.className = 'chat-message ' + (isUser ? 'user' : 'bot'); messageDiv.textContent = content; chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight; } function showTyping() { isTyping = true; typingIndicator.style.display = 'flex'; chatMessages.scrollTop = chatMessages.scrollHeight; } function hideTyping() { isTyping = false; typingIndicator.style.display = 'none'; } async function sendMessage() { const message = chatInput.value.trim(); if (!message || isTyping) return; addMessage(message, true); chatInput.value = ''; sendButton.disabled = true; showTyping(); try { const response = await fetch('/api/chat-universal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: message, url: config.url, instructions: config.instructions, robotName: config.robotName, conversationId: config.conversationId, leadId: leadId }) }); const data = await response.json(); hideTyping(); if (data.success) { addMessage(data.response); } else { addMessage('Desculpe, ocorreu um erro. Tente novamente em alguns minutos.'); } } catch (error) { hideTyping(); addMessage('Erro de conexão. Verifique sua internet e tente novamente.'); } finally { sendButton.disabled = false; chatInput.focus(); } } sendButton.addEventListener('click', sendMessage); chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }); // Auto-focus no primeiro campo do formulário document.getElementById('leadName').focus(); </script></body> </html>`; }
 // ===== CONFIGURAR NOVAS ROTAS =====
 setupRoutes(app);
 
 // ===== INICIALIZAR SISTEMAS =====
 (async () => {
-    await initialize();
-    
-    // Iniciar servidor
-    const PORT = process.env.PORT || 3000;
+await initialize();
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
 
 // ===== ROTAS DAS NOVAS INTEGRAÇÕES V3.0 =====
 
 // Gmail Integration
 app.post('/api/gmail/send', async (req, res) => {
-    try {
-        const { to, subject, html, text } = req.body;
-        const result = await gmailManager.sendEmail({ to, subject, html, text });
-        res.json({ success: true, result });
-    } catch (error) {
-        logger.error('Erro ao enviar email:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { to, subject, html, text } = req.body;
+const result = await gmailManager.sendEmail({ to, subject, html, text });
+res.json({ success: true, result });
+} catch (error) {
+logger.error('Erro ao enviar email:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 app.get('/api/gmail/status', (req, res) => {
-    const status = gmailManager.getStatus();
-    res.json(status);
+const status = gmailManager.getStatus();
+res.json(status);
 });
 
 // WhatsApp Integration
 app.post('/api/whatsapp/send', async (req, res) => {
-    try {
-        const { to, message } = req.body;
-        const result = await whatsappManager.sendMessage(to, message);
-        res.json({ success: true, result });
-    } catch (error) {
-        logger.error('Erro ao enviar WhatsApp:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { to, message } = req.body;
+const result = await whatsappManager.sendMessage(to, message);
+res.json({ success: true, result });
+} catch (error) {
+logger.error('Erro ao enviar WhatsApp:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 app.get('/api/whatsapp/status', (req, res) => {
-    const status = whatsappManager.getStatus();
-    res.json(status);
+const status = whatsappManager.getStatus();
+res.json(status);
 });
 
 // ChatGPT Integration
 app.post('/api/chatgpt/generate', async (req, res) => {
-    try {
-        const { prompt, model, pageContent } = req.body;
-        const result = await chatgptManager.generateResponse(prompt, pageContent, model);
-        res.json({ success: true, result });
-    } catch (error) {
-        logger.error('Erro ao gerar resposta ChatGPT:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { prompt, model, pageContent } = req.body;
+const result = await chatgptManager.generateResponse(prompt, pageContent, model);
+res.json({ success: true, result });
+} catch (error) {
+logger.error('Erro ao gerar resposta ChatGPT:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 app.get('/api/chatgpt/status', (req, res) => {
-    const status = chatgptManager.getStatus();
-    res.json(status);
+const status = chatgptManager.getStatus();
+res.json(status);
 });
 
 app.get('/api/chatgpt/models', (req, res) => {
-    const models = chatgptManager.getAvailableModels();
-    res.json(models);
+const models = chatgptManager.getAvailableModels();
+res.json(models);
 });
 
 // Whitelabel System
 app.post('/api/whitelabel/:chatbotId', async (req, res) => {
-    try {
-        const { chatbotId } = req.params;
-        const config = req.body;
-        await whitelabelManager.saveConfig(chatbotId, config);
-        res.json({ success: true, config });
-    } catch (error) {
-        logger.error('Erro ao salvar config whitelabel:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { chatbotId } = req.params;
+const config = req.body;
+await whitelabelManager.saveConfig(chatbotId, config);
+res.json({ success: true, config });
+} catch (error) {
+logger.error('Erro ao salvar config whitelabel:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 app.get('/api/whitelabel/:chatbotId', async (req, res) => {
-    try {
-        const { chatbotId } = req.params;
-        const config = await whitelabelManager.getConfig(chatbotId);
-        res.json({ success: true, config });
-    } catch (error) {
-        logger.error('Erro ao buscar config whitelabel:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { chatbotId } = req.params;
+const config = await whitelabelManager.getConfig(chatbotId);
+res.json({ success: true, config });
+} catch (error) {
+logger.error('Erro ao buscar config whitelabel:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 // Structured Leads
 app.post('/api/leads/structured', async (req, res) => {
-    try {
-        const { chatbotId, leadData, metadata } = req.body;
-        const lead = await structuredLeadsManager.saveLead(chatbotId, leadData, metadata);
-        
-        // Enviar notificações
-        if (process.env.GMAIL_USER) {
-            await gmailManager.sendLeadNotification(lead);
-        }
-        if (process.env.WHATSAPP_PROVIDER) {
-            await whatsappManager.sendLeadNotification(lead);
-        }
-        
-        res.json({ success: true, lead });
-    } catch (error) {
-        logger.error('Erro ao salvar lead estruturado:', error);
-        res.status(500).json({ success: false, error: error.message });
+try {
+const { chatbotId, leadData, metadata } = req.body;
+const lead = await structuredLeadsManager.saveLead(chatbotId, leadData, metadata);
+
+    // Enviar notificações
+    if (process.env.GMAIL_USER) {
+        await gmailManager.sendLeadNotification(lead);
     }
+    if (process.env.WHATSAPP_PROVIDER) {
+        await whatsappManager.sendLeadNotification(lead);
+    }
+    
+    res.json({ success: true, lead });
+} catch (error) {
+    logger.error('Erro ao salvar lead estruturado:', error);
+    res.status(500).json({ success: false, error: error.message });
+}
+
 });
 
 app.get('/api/leads/structured/:chatbotId', async (req, res) => {
-    try {
-        const { chatbotId } = req.params;
-        const { status, limit, offset } = req.query;
-        const leads = await structuredLeadsManager.getLeads(chatbotId, { status, limit, offset });
-        res.json({ success: true, leads });
-    } catch (error) {
-        logger.error('Erro ao buscar leads:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { chatbotId } = req.params;
+const { status, limit, offset } = req.query;
+const leads = await structuredLeadsManager.getLeads(chatbotId, { status, limit, offset });
+res.json({ success: true, leads });
+} catch (error) {
+logger.error('Erro ao buscar leads:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 app.get('/api/leads/export/:chatbotId', async (req, res) => {
-    try {
-        const { chatbotId } = req.params;
-        const csv = await structuredLeadsManager.exportToCSV(chatbotId);
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="leads-${chatbotId}.csv"`);
-        res.send(csv);
-    } catch (error) {
-        logger.error('Erro ao exportar leads:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { chatbotId } = req.params;
+const csv = await structuredLeadsManager.exportToCSV(chatbotId);
+res.setHeader('Content-Type', 'text/csv');
+res.setHeader('Content-Disposition', attachment; filename="leads-${chatbotId}.csv");
+res.send(csv);
+} catch (error) {
+logger.error('Erro ao exportar leads:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 app.get('/api/leads/stats/:chatbotId', async (req, res) => {
-    try {
-        const { chatbotId } = req.params;
-        const stats = await structuredLeadsManager.getStats(chatbotId);
-        res.json({ success: true, stats });
-    } catch (error) {
-        logger.error('Erro ao buscar estatísticas:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
+try {
+const { chatbotId } = req.params;
+const stats = await structuredLeadsManager.getStats(chatbotId);
+res.json({ success: true, stats });
+} catch (error) {
+logger.error('Erro ao buscar estatísticas:', error);
+res.status(500).json({ success: false, error: error.message });
+}
 });
 
 // CRM Integrations (documentação)
 app.get('/api/crm/templates', (req, res) => {
-    const templates = crmIntegrations.getAllTemplates();
-    res.json({ success: true, templates });
+const templates = crmIntegrations.getAllTemplates();
+res.json({ success: true, templates });
 });
 
 app.get('/api/crm/templates/:crm', (req, res) => {
-    const { crm } = req.params;
-    const template = crmIntegrations.getTemplate(crm);
-    if (template) {
-        res.json({ success: true, template });
-    } else {
-        res.status(404).json({ success: false, error: 'CRM não encontrado' });
-    }
+const { crm } = req.params;
+const template = crmIntegrations.getTemplate(crm);
+if (template) {
+res.json({ success: true, template });
+} else {
+res.status(404).json({ success: false, error: 'CRM não encontrado' });
+}
 });
 
 console.log('✅ Rotas V3.0 configuradas');
 
 app.listen(PORT, '0.0.0.0', () => {
-        logger.info(`Server running on port ${PORT}`);
-        
-        console.log(`🌐 Servidor rodando em http://0.0.0.0:${PORT}` );
-        console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/api/system/status` );
-        console.log(`🚀 LinkMágico v7.0 SUPERINTELIGENTE running on http://0.0.0.0:${PORT}` );
-        console.log(`📊 Health check: http://0.0.0.0:${PORT}/health` );
-        console.log(`🤖 Chatbot disponível em: http://0.0.0.0:${PORT}/chatbot` );
-        console.log(`🔧 Widget JS disponível em: http://0.0.0.0:${PORT}/public/widget.js` );
-        console.log(`🎯 Sistema de captura de leads PERSISTENTE ATIVADO`);
-        console.log(`📈 Painel de leads: http://0.0.0.0:${PORT}/admin/leads` );
-        console.log(`📞 Extração de contatos: ATIVADA`);
-        console.log(`🧠 SUPERINTELIGÊNCIA EMOCIONAL: ATIVADA`);
-        console.log(`📅 Sistema de agendamento: ATIVADO`);
-        console.log(`🎯 Botões fixos no topo: IMPLEMENTADOS`);
-        console.log(`👥 Jornada do cliente: Análise inteligente ATIVADA`);
-        console.log(`🎭 Personalidades adaptativas: CONSULTIVO, EMPÁTICO, TÉCNICO, MOTIVACIONAL`);
-        console.log(`🚨 Detecção de urgência: ATIVADA`);
-        console.log(`🎯 Endpoint inteligente: /api/process-chat-inteligente`);
-    });
-})();
+logger.info(Server running on port ${PORT});
+
+    console.log(`🌐 Servidor rodando em http://0.0.0.0:${PORT}` );
+    console.log(`📊 Dashboard: http://0.0.0.0:${PORT}/api/system/status` );
+    console.log(`🚀 LinkMágico v7.0 SUPERINTELIGENTE running on http://0.0.0.0:${PORT}` );
+    console.log(`📊 Health check: http://0.0.0.0:${PORT}/health` );
+    console.log(`🤖 Chatbot disponível em: http://0.0.0.0:${PORT}/chatbot` );
+    console.log(`🔧 Widget JS disponível em: http://0.0.0.0:${PORT}/public/widget.js` );
+    console.log(`🎯 Sistema de captura de leads PERSISTENTE ATIVADO`);
+    console.log(`📈 Painel de leads: http://0.0.0.0:${PORT}/admin/leads` );
+    console.log(`📞 Extração de contatos: ATIVADA`);
+    console.log(`🧠 SUPERINTELIGÊNCIA CONVERSACIONAL: ATIVADA`);
+    console.log(`🎭 Detecção de sarcasmo e ironia: IMPLEMENTADA`);
+    console.log(`🧩 Análise de múltiplas intenções: FUNCIONANDO`);
+    console.log(`💾 Memória conversacional avançada: OPERACIONAL`);
+    console.log(`🎨 Personalidades adaptativas: CONSULTIVO, EMPÁTICO, TÉCNICO, MOTIVACIONAL`);
+    console.log(`🚨 Detecção de urgência: ATIVADA`);
+    console.log(`📅 Sistema de agendamento: IMPLEMENTADO`);
+    console.log(`🎯 Botões fixos no topo: FUNCIONANDO`);
+    console.log(`👥 Jornada do cliente: Análise inteligente ATIVADA`);
+    console.log(`🧠 Endpoint superinteligente: /api/process-chat-inteligente`);
+    console.log(`🎉 SISTEMA SUPERINTELIGENTE IMPLANTADO COM SUCESSO!`);
+});
