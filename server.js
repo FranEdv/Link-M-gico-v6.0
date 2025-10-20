@@ -3240,7 +3240,7 @@ function combinarRespostas(respostaIA, respostaSuperInteligente, estadoEmocional
         } else if (estadoEmocional.sarcasmo) {
             return `Percebi o tom da sua mensagem 😄 ${respostaIA}`;
         } else if (estadoEmocional.urgencia) {
-            return `🚨 Priorizando isso! ${respostaIA}`;
+            return `😊 ${respostaIA}`;
         }
     }
 
